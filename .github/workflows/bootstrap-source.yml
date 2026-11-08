@@ -1,0 +1,52 @@
+name: Bootstrap MTUNZ source into repository
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - mtunz-source-bundle.tar.gz
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  extract-and-dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate and extract audited source bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s mtunz-source-bundle.tar.gz
+          tar -tzf mtunz-source-bundle.tar.gz >/dev/null
+          tar -xzf mtunz-source-bundle.tar.gz -C .
+          rm -f mtunz-source-bundle.tar.gz
+          test -f app/pubspec.yaml
+          test -f server/main.go
+          test -f .github/workflows/build-native.yml
+          test -f scripts/prepare-flutter-project.sh
+
+      - name: Commit source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Source tree already matches the repository."
+          else
+            git commit -m "Add MTUNZ native Windows and Android source"
+            git push origin HEAD:main
+          fi
+
+      - name: Dispatch native build workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/banlungtung1234-lab/MTUNZ/actions/workflows/build-native.yml/dispatches -f ref=main
