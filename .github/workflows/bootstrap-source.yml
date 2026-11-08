@@ -25,6 +25,7 @@ jobs:
           set -euo pipefail
           test -n "$(find source-bundle.parts -maxdepth 1 -name '*.b64' -print -quit)"
           cat source-bundle.parts/*.b64 | base64 --decode > mtunz-source-bundle.tar.gz
+          echo "84de0519a221234c66d6e66d1b7856babe6fec8ae64ec39b04b0f9ca2788b147  mtunz-source-bundle.tar.gz" | sha256sum --check
           tar -tzf mtunz-source-bundle.tar.gz >/dev/null
           tar -xzf mtunz-source-bundle.tar.gz -C .
           rm -rf mtunz-source-bundle.tar.gz source-bundle.parts
