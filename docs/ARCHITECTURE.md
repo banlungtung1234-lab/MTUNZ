@@ -1,0 +1,29 @@
+# MTUNZ architecture — 0.1.1-dev
+
+## Control plane and media plane
+
+- **Control plane:** Go signaling service. It creates short-lived rooms, authenticates joining devices with an invitation PIN, gives each peer a random bearer token, and forwards WebRTC offer/answer/ICE messages. It never receives screen frames.
+- **Media plane:** WebRTC peer connections. The application attempts direct connectivity using ICE and a STUN server. WebRTC encrypts media/data transport at the peer connection layer.
+- **Application:** One Flutter codebase is compiled into native Windows and Android packages. It is not served in a browser.
+- **Android native bridge:** Kotlin AccessibilityService dispatches explicit tap/swipe gestures only after the device owner enables the service and approves a remote-control request. A dedicated foreground service of type `mediaProjection` is started only after the Android screen-sharing consent prompt is approved.
+- **Windows native bridge:** Win32 `SendInput` handles approved mouse tap/swipe events. It deliberately does not attempt to control the lock screen or UAC secure desktop.
+
+## Room lifecycle
+
+1. A client asks `POST /api/rooms` for an 8-character room code and 6-digit PIN.
+2. Each client joins with `POST /api/rooms/{code}/join` and receives an individual 256-bit peer token.
+3. Clients poll `GET /api/rooms/{code}/events?peerId=...` with their bearer token.
+4. A peer posts SDP/ICE signaling to `POST /api/rooms/{code}/signal`; the server queues that message for the target peer.
+5. `POST /api/rooms/{code}/leave` removes the peer. Empty rooms are deleted. All rooms expire after 15 minutes.
+6. The room accepts no more than three participants and expires after 15 minutes. The server accepts at most 64 active rooms globally.
+7. Requests are capped at 32 KB; each peer has a bounded 32-message queue and only one long-poll request at a time. Queue overflow returns `503` instead of silently dropping a WebRTC signal.
+8. Room creation is limited to 6 attempts and joining to 12 attempts per source IP within a 5-minute window. Rate-limit tables are bounded in memory.
+
+## Security boundaries
+
+- Invitation PIN is a 6-digit short-lived pairing secret, not an account identity. PIN/token comparisons use constant-time byte comparison once input shape is validated.
+- Room codes and PINs are generated with the cryptographically secure random source; room-code selection avoids modulo bias.
+- Each joined peer receives a separate bearer token.
+- Remote input is deny-by-default on the Android device; each incoming request is displayed to the user.
+- Android AccessibilityService does not request window-content retrieval. It only dispatches touch gestures.
+- The current server is a LAN-only development service. HTTPS reverse proxy, TURN credentials, stronger anti-abuse controls, signed app packages and external security review are required before public release.

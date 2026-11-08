@@ -1,1 +1,0 @@
-Trigger the audited source extraction workflow. The build-native workflow is already installed directly on main so the GITHUB_TOKEN does not need workflow permission to update it.

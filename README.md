@@ -48,9 +48,9 @@ This is a development milestone, not a finished UltraViewer replacement. In part
 
 ## Quick local network test (Windows + Android)
 
-These steps apply after the Android APK and Windows desktop package have been built. The current development source archive includes the signaling server only; it does not yet include those two application installers.
+These steps apply after the Android APK and Windows desktop package have been built. The source repository does not commit generated binaries. Download the `MTUNZ-Signaling-Windows` artifact from a successful GitHub Actions run and place `MTUNZ-Signaling-Windows.exe` beside `start-server.bat`. The Android and desktop application artifacts are built separately by the same workflow.
 
-1. Extract the entire source bundle, then double-click `start-server.bat` (it sets port `8787` and launches `MTUNZ-Signaling-Windows.exe`).
+1. Download the `MTUNZ-Signaling-Windows` artifact from the latest successful Actions run, extract it, and place `MTUNZ-Signaling-Windows.exe` beside `start-server.bat`; then double-click `start-server.bat` (it sets port `8787`).
 2. Allow it through Windows Firewall for **Private networks only** when prompted.
 3. Find the Windows PC's IPv4 address using `ipconfig` (the Wi-Fi adapter address, e.g. `192.168.1.20`).
 4. In MTUNZ on both devices, set the signaling address to `http://192.168.1.20:8787`.

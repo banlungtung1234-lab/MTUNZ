@@ -1,0 +1,32 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+
+# Generated native project files and local SDK configuration
+app/android/.gradle/
+app/android/local.properties
+app/android/app/build/
+app/windows/flutter/ephemeral/
+app/windows/CMakeFiles/
+app/windows/CMakeCache.txt
+app/windows/build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+
+# Generated release binaries
+/MTUNZ-Signaling-Windows.exe
+/server/MTUNZ-Signaling-Windows.exe
