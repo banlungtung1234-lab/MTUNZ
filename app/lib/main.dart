@@ -196,6 +196,7 @@ class _HomeShellState extends State<HomeShell> {
     }
     if (Platform.isAndroid) {
       final accessibilityEnabled = await PlatformController.isAccessibilityEnabled();
+      if (!mounted) return;
       if (!accessibilityEnabled) {
         final openSettings = await showDialog<bool>(
           context: context,
@@ -212,6 +213,7 @@ class _HomeShellState extends State<HomeShell> {
         return;
       }
     }
+    if (!mounted) return;
     final allow = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -426,7 +428,7 @@ class _HomeShellState extends State<HomeShell> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(13),
               gradient: const LinearGradient(colors: [Color(0xFF31D6F3), Color(0xFF706BFF)]),
-              boxShadow: [BoxShadow(color: const Color(0xFF31D6F3).withOpacity(.18), blurRadius: 22)],
+              boxShadow: [BoxShadow(color: const Color(0xFF31D6F3).withValues(alpha: .18), blurRadius: 22)],
             ),
             child: const Icon(Icons.hub_rounded, color: Color(0xFF07111F), size: 24),
           ),
@@ -518,7 +520,7 @@ class _HomeShellState extends State<HomeShell> {
           border: Border.all(color: const Color(0xFF23536A)),
         ),
         child: Stack(children: [
-          Positioned(right: -12, top: -22, child: Icon(Icons.hub_rounded, size: 170, color: Colors.white.withOpacity(.035))),
+          Positioned(right: -12, top: -22, child: Icon(Icons.hub_rounded, size: 170, color: Colors.white.withValues(alpha: .035))),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Row(children: [Icon(Icons.bolt_rounded, color: Color(0xFF52E1F5), size: 18), SizedBox(width: 7), Text('MTUNZ  /  CROSS-DEVICE', style: TextStyle(color: Color(0xFF8EEBFA), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.6))]),
             const SizedBox(height: 18),
@@ -662,7 +664,7 @@ class _HomeShellState extends State<HomeShell> {
                   }),
           ),
           const SizedBox(height: 8),
-          Row(children: [OutlinedButton.icon(onPressed: () => _mesh?.requestControl(peer.id), icon: const Icon(Icons.touch_app_rounded, size: 15), label: const Text('Yêu cầu điều khiển')), const SizedBox(width: 8), Text('Quyền điều khiển cần được chấp thuận trên thiết bị nhận.', style: const TextStyle(color: Color(0xFF7F91A8), fontSize: 9))]),
+          Row(children: [OutlinedButton.icon(onPressed: () => _mesh?.requestControl(peer.id), icon: const Icon(Icons.touch_app_rounded, size: 15), label: const Text('Yêu cầu điều khiển')), const SizedBox(width: 8), const Text('Quyền điều khiển cần được chấp thuận trên thiết bị nhận.', style: TextStyle(color: Color(0xFF7F91A8), fontSize: 9))]),
         ]),
       );
 
