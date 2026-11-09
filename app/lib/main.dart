@@ -713,12 +713,34 @@ class _HomeShellState extends State<HomeShell> {
     final uri = Uri.tryParse(raw);
     final validScheme = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
     final validPort = uri != null && (!uri.hasPort || (uri.port >= 1 && uri.port <= 65535));
-    if (uri == null || !uri.hasScheme || !validScheme || uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment || !validPort) {
+    if (uri == null ||
+        !uri.hasScheme ||
+        !validScheme ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !validPort) {
       if (showNotice) _showSnack(_t('server_invalid'));
       return false;
     }
-    final normalized = uri.replace(path: uri.path.replaceFirst(RegExp(r'/
+
+    final path = uri.path.endsWith('/')
+        ? uri.path.substring(0, uri.path.length - 1)
+        : uri.path;
+    final normalized = uri.replace(path: path).toString();
+    final localHost = uri.host == '127.0.0.1' ||
+        uri.host == 'localhost' ||
+        _networkEndpoints.any((endpoint) => endpoint.address == uri.host);
+
+    setState(() {
+      _serverUrl = normalized;
+      _usesEmbeddedCore =
+          _embeddedCore.isRunning && uri.port == _embeddedCore.port && localHost;
+    });
+    if (showNotice) _showSnack(_t('server_saved'));
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
