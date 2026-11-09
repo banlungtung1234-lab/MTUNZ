@@ -69,14 +69,14 @@ These steps apply after the Android APK and Windows desktop package have been bu
 
 1. Download the `MTUNZ-Signaling-Windows` artifact from the latest successful Actions run, extract it, and place `MTUNZ-Signaling-Windows.exe` beside `start-server.bat`; then double-click `start-server.bat` (it sets port `8787`).
 2. Allow it through Windows Firewall for **Private networks only** when prompted.
-3. Find the Windows PC's IPv4 address using `ipconfig` (the Wi-Fi adapter address, e.g. `192.168.1.20`).
+3. In Windows MTUNZ → **Settings** → **WI-FI / ETHERNET / USB**, scan adapters and select the IPv4 address reachable by the Android device. Alternatively, run `ipconfig` and identify the correct Wi-Fi, Ethernet or RNDIS adapter (e.g. `192.168.1.20`).
 4. In MTUNZ on both devices, set the signaling address to `http://192.168.1.20:8787`.
 5. Create a room on one device. Enter its room code and PIN on the other.
 6. Start screen sharing on the device whose screen should be viewed. Android will show its system sharing-consent screen.
 7. To control Android, the Android owner must enable MTUNZ Accessibility under Android Settings and approve the control request.
 8. To transfer a file, open **Files** in MTUNZ, choose the connected device and select a file. The receiving device must approve the incoming request and choose a save location. Each file is limited to 100 MB.
 
-Both devices must be on the same Wi-Fi for this first test. If the room connects but the video does not, the network may block direct P2P; TURN relay is the next networking milestone.
+Both devices must be able to reach the Windows signaling server over the same LAN or tethered IP network. Examples: Windows Ethernet + Android Wi-Fi on the same router, or Android USB tethering with Windows using the RNDIS adapter address. A USB cable alone is not a raw direct-USB transport. If the room connects but video/data does not, the network may block direct P2P; a deployed TURN relay is required for those restrictive paths.
 
 ## Build pipeline
 
