@@ -26,7 +26,11 @@ Máy chủ dùng cổng TCP `8787`. Đây là cấu hình thử nghiệm mạng 
 
 ## 3. Cài ứng dụng
 
-**Windows:** mở thư mục `Windows/MTUNZ` trong gói, sau đó chạy `MTUNZ.exe`. Không di chuyển riêng file EXE ra khỏi thư mục vì ứng dụng cần các DLL và thư mục `data` đi kèm.
+**Windows:**
+
+1. Trước khi chạy, bảo đảm máy có Microsoft Visual C++ Redistributable x64 bản được hỗ trợ mới nhất. Nếu gặp lỗi thiếu `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll` hoặc `MSVCP140.dll`, cài từ [trang tải chính thức Microsoft](https://aka.ms/vc14/vc_redist.x64.exe). Máy đã có runtime tương thích thì bỏ qua bước này.
+2. Mở thư mục `Windows/MTUNZ` trong gói, sau đó chạy `MTUNZ.exe`. Không di chuyển riêng file EXE ra khỏi thư mục vì ứng dụng cần các DLL và thư mục `data` đi kèm.
+3. Nếu Windows Firewall hỏi, chỉ cấp quyền trên mạng đáng tin cậy (Private) cho signaling server; không mở cổng 8787 ra Internet.
 
 **Android:** chép `Android/MTUNZ-Android-0.3.1-dev.apk` sang điện thoại và mở để cài đặt. Chỉ cấp quyền cài ứng dụng không rõ nguồn cho trình quản lý tệp/trình duyệt mà bạn đang dùng, sau đó có thể tắt quyền này lại.
 
@@ -51,7 +55,11 @@ Trên Android, không nhập `127.0.0.1`: địa chỉ đó trỏ về chính đ
 
 Giới hạn hiện tại là **100 MB cho mỗi tệp**. Bên nhận ghép toàn bộ tệp trong bộ nhớ trước khi mở hộp thoại lưu; MTUNZ chỉ nhận/lưu một tệp tại một thời điểm để hạn chế tăng RAM. Gói truyền dùng chunk 60 KB và hàng đợi gửi có kiểm soát 4/2 MB; tốc độ thực tế vẫn phụ thuộc mạng, CPU và thiết bị nhận.
 
-## 6. Lưu ý khi kiểm thử
+## 6. Kết nối qua Internet (tùy chọn)
+
+Gói Windows LAN không tự tạo máy chủ công khai. Để kết nối qua hai mạng Internet khác nhau, cần tự triển khai Linux VPS theo `Remote-Server/deploy/README.md` trong gói hoặc `deploy/README.md` trong repository. Cấu hình đó cần domain/DNS, firewall, HTTPS và coturn. Chỉ nhập URL `https://ten-mien-cua-ban` sau khi VPS đã triển khai xong. Không dùng HTTP port 8787 công khai.
+
+## 7. Lưu ý khi kiểm thử
 
 - CI chạy Flutter analyze/tests, Android APK build, Windows x64 build trên hai runner Windows, Go race tests/vet và Windows signaling cross-build. Đây là kiểm tra build trên runner, không thay thế chạy thử trực tiếp trên máy Windows 10 và Windows 11.
 - CI không thay thế kiểm thử thực tế. Cần thử gửi tệp nhỏ theo cả hai chiều Windows → Android và Android → Windows, thử từ chối, hủy, hủy chọn nơi lưu và ngắt Wi-Fi giữa chừng.
