@@ -5,6 +5,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mtunz/services/signaling_client.dart';
 
 void main() {
+  test('loopback signaling bypasses a local proxy listener', () {
+    expect(
+      SignalingClient.proxyFor(Uri.parse('http://127.0.0.1:8787')),
+      'DIRECT',
+    );
+    expect(
+      SignalingClient.proxyFor(Uri.parse('http://localhost:8787')),
+      'DIRECT',
+    );
+  });
+
+  test('private LAN and USB-tether addresses bypass local proxies', () {
+    for (final url in [
+      'http://192.168.1.20:8787',
+      'http://10.0.0.2:8787',
+      'http://172.20.10.1:8787',
+      'http://100.64.0.1:8787',
+      'http://[fc00::1]:8787',
+    ]) {
+      expect(SignalingClient.proxyFor(Uri.parse(url)), 'DIRECT', reason: url);
+    }
+  });
+
   test('join response keeps valid STUN/TURN servers and temporary credentials', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final peerToken = List<String>.filled(64, 'a').join();
