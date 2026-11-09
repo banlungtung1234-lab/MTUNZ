@@ -470,10 +470,10 @@ class _HomeShellState extends State<HomeShell> {
           children: [
             _brand(),
             const SizedBox(height: 38),
-            _navItem(0, Icons.space_dashboard_rounded, 'Tổng quan'),
-            _navItem(1, Icons.devices_rounded, 'Thiết bị'),
-            _navItem(2, Icons.cast_connected_rounded, 'Phiên điều khiển'),
-            _navItem(3, Icons.tune_rounded, 'Cài đặt'),
+            _navItem(0, Icons.space_dashboard_rounded, _t('nav_overview')),
+            _navItem(1, Icons.devices_rounded, _t('nav_devices')),
+            _navItem(2, Icons.cast_connected_rounded, _t('nav_session')),
+            _navItem(3, Icons.tune_rounded, _t('nav_settings')),
             const Spacer(),
             _connectionCard(),
           ],
@@ -542,7 +542,7 @@ class _HomeShellState extends State<HomeShell> {
         child: Row(children: [
           if (!wide) _brand(),
           if (!wide) const Spacer(),
-          if (wide) const Expanded(child: Text('WORKSPACE  /  MTUNZ NETWORK', style: TextStyle(color: Color(0xFF8191A8), fontSize: 10, letterSpacing: 1.8))),
+          if (wide) Expanded(child: Text(_t('workspace'), style: const TextStyle(color: Color(0xFF8191A8), fontSize: 10, letterSpacing: 1.8))),
           _statusPill(),
         ]),
       );
@@ -558,9 +558,9 @@ class _HomeShellState extends State<HomeShell> {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 26),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Kết nối mọi thiết bị.', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -.7)),
+            Text(_t('overview_title'), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -.7)),
             const SizedBox(height: 8),
-            const Text('Một không gian điều khiển. Nhiều thiết bị. Một kết nối liền mạch.', style: TextStyle(color: Color(0xFF91A0B7), fontSize: 13)),
+            Text(_t('overview_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 13)),
             const SizedBox(height: 25),
             _heroCard(),
             const SizedBox(height: 18),
@@ -582,44 +582,44 @@ class _HomeShellState extends State<HomeShell> {
         child: Stack(children: [
           Positioned(right: -12, top: -22, child: Icon(Icons.hub_rounded, size: 170, color: Colors.white.withValues(alpha: .035))),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Row(children: [Icon(Icons.bolt_rounded, color: Color(0xFF52E1F5), size: 18), SizedBox(width: 7), Text('MTUNZ  /  CROSS-DEVICE', style: TextStyle(color: Color(0xFF8EEBFA), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.6))]),
+            Row(children: [const Icon(Icons.bolt_rounded, color: Color(0xFF52E1F5), size: 18), const SizedBox(width: 7), Text(_t('cross_device'), style: const TextStyle(color: Color(0xFF8EEBFA), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.6))]),
             const SizedBox(height: 18),
-            const Text('Your devices.\nOne control center.', style: TextStyle(fontSize: 29, height: 1.12, fontWeight: FontWeight.w800)),
+            Text(_t('hero_title'), style: const TextStyle(fontSize: 29, height: 1.12, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
-            const Text('Kết nối Windows và Android qua mạng nội bộ hoặc Internet khi máy chủ được cấu hình phù hợp.', style: TextStyle(color: Color(0xFFB4C7D8), fontSize: 12, height: 1.5)),
+            Text(_t('hero_subtitle'), style: const TextStyle(color: Color(0xFFB4C7D8), fontSize: 12, height: 1.5)),
             const SizedBox(height: 20),
             Wrap(spacing: 10, runSpacing: 9, children: [
-              FilledButton.icon(onPressed: _busy ? null : _createRoom, icon: const Icon(Icons.add_link_rounded, size: 18), label: const Text('Tạo phòng kết nối')),
-              OutlinedButton.icon(onPressed: _busy ? null : _showJoinDialog, icon: const Icon(Icons.login_rounded, size: 17), label: const Text('Nhập mã phòng')),
+              FilledButton.icon(onPressed: _busy ? null : _createRoom, icon: const Icon(Icons.add_link_rounded, size: 18), label: Text(_t('create_room'))),
+              OutlinedButton.icon(onPressed: _busy ? null : _showJoinDialog, icon: const Icon(Icons.login_rounded, size: 17), label: Text(_t('enter_room'))),
             ]),
           ]),
         ]),
       );
 
   Widget _quickActions() => _panel(
-        title: 'TRUY CẬP NHANH',
-        subtitle: 'Các thao tác thường dùng',
+        title: _t('quick_access'),
+        subtitle: _t('common_actions'),
         child: Column(children: [
-          _actionRow(Icons.cast_connected_rounded, 'Chia sẻ màn hình', 'Phát màn hình thiết bị này', _sharing ? 'Đang chia sẻ' : 'Bắt đầu', _sharing ? _stopShare : _startShare),
+          _actionRow(Icons.cast_connected_rounded, _t('screen_share'), _t('screen_share_desc'), _sharing ? _t('sharing') : _t('start'), _sharing ? _stopShare : _startShare),
           const Divider(height: 22, color: Color(0xFF24334A)),
-          _actionRow(Icons.devices_rounded, 'Thiết bị đã kết nối', '${_peers.length} thiết bị trong phiên', 'Xem', () => setState(() => _selectedIndex = 1)),
+          _actionRow(Icons.devices_rounded, _t('nav_devices'), _t('devices_in_session', {'count': '${_peers.length}'}), _t('view'), () => setState(() => _selectedIndex = 1)),
           const Divider(height: 22, color: Color(0xFF24334A)),
-          _actionRow(Icons.qr_code_2_rounded, 'Ghép nối thiết bị', 'Tạo mã mời tạm thời', 'Tạo mã', _createRoom),
+          _actionRow(Icons.qr_code_2_rounded, _t('pair_device'), _t('create_invite'), _t('create_room'), _createRoom),
         ]),
       );
 
   Widget _connectedCard() => _panel(
-        title: 'THIẾT BỊ TRONG PHIÊN',
-        subtitle: 'Giới hạn hiện tại: 3 thiết bị / phòng',
+        title: _t('devices_in_room'),
+        subtitle: _t('room_limit_subtitle'),
         child: _peers.isEmpty
             ? const Padding(padding: EdgeInsets.symmetric(vertical: 15), child: Row(children: [Icon(Icons.devices_other_rounded, color: Color(0xFF62748D), size: 32), SizedBox(width: 13), Expanded(child: Text('Chưa có thiết bị nào tham gia. Tạo phòng hoặc nhập mã mời để bắt đầu.', style: TextStyle(color: Color(0xFF93A2B7), fontSize: 12, height: 1.45))) ]))
             : Column(children: _peers.map(_peerRow).toList()),
       );
 
   Widget _featureStrip() => Wrap(spacing: 10, runSpacing: 10, children: [
-        _miniFeature(Icons.hd_rounded, 'Truyền hình ảnh WebRTC'),
-        _miniFeature(Icons.lock_outline_rounded, 'Quyền điều khiển có xác nhận'),
-        _miniFeature(Icons.hub_rounded, 'Tối đa 3 thiết bị / phòng'),
+        _miniFeature(Icons.hd_rounded, _t('feature_webrtc')),
+        _miniFeature(Icons.lock_outline_rounded, _t('feature_approval')),
+        _miniFeature(Icons.hub_rounded, _t('feature_limit')),
       ]);
 
   Widget _miniFeature(IconData icon, String text) => Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: const Color(0xFF101A2A), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF223149))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 15, color: const Color(0xFF49DDF4)), const SizedBox(width: 8), Text(text, style: const TextStyle(fontSize: 10, color: Color(0xFF9EADC1))) ]));
@@ -627,13 +627,13 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildDevices() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Thiết bị', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          Text(_t('devices_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          const Text('Quản lý các thiết bị đang tham gia phòng hiện tại.', style: TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          Text(_t('devices_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
           const SizedBox(height: 22),
-          _panel(title: 'TRONG PHIÊN HIỆN TẠI', subtitle: 'Một phòng hỗ trợ tối đa ba thiết bị', child: _peers.isEmpty ? const Text('Chưa có thiết bị từ xa.', style: TextStyle(color: Color(0xFF91A0B7))) : Column(children: _peers.map(_peerRow).toList())),
+          _panel(title: _t('current_session'), subtitle: _t('three_device_limit'), child: _peers.isEmpty ? Text(_t('no_remote_devices'), style: const TextStyle(color: Color(0xFF91A0B7))) : Column(children: _peers.map(_peerRow).toList())),
           const SizedBox(height: 16),
-          _panel(title: 'THÊM THIẾT BỊ', subtitle: 'Mã phòng chỉ có hiệu lực trong thời gian ngắn', child: Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _createRoom, icon: const Icon(Icons.add), label: const Text('Tạo phòng')), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.login), label: const Text('Tham gia phòng'))])),
+          _panel(title: _t('add_device'), subtitle: _t('temporary_room'), child: Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _createRoom, icon: const Icon(Icons.add), label: Text(_t('create_room'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.login), label: Text(_t('join_room')))])),
         ]),
       );
 
@@ -642,7 +642,7 @@ class _HomeShellState extends State<HomeShell> {
         child: Row(children: [
           Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF172C42), borderRadius: BorderRadius.circular(12)), child: Icon(peer.name.toLowerCase().contains('android') ? Icons.smartphone_rounded : Icons.laptop_mac_rounded, color: const Color(0xFF52DDF2))),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), Text(peer.state, style: const TextStyle(color: Color(0xFF8193AA), fontSize: 10))])),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), Text(_peerStateLabel(peer.state), style: const TextStyle(color: Color(0xFF8193AA), fontSize: 10))])),
           const Icon(Icons.circle, color: Color(0xFF41D6A0), size: 8),
         ]),
       );
@@ -650,14 +650,14 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildSession() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Phiên điều khiển', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), SizedBox(height: 7), Text('Kết nối ngang hàng và chia sẻ màn hình.', style: TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: const Text('Ngắt phiên'))]),
+          Row(children: [const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('session_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), SizedBox(height: 7), Text(_t('session_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: Text(_t('disconnect')))]),
           const SizedBox(height: 20),
-          if (_roomCode == null) _panel(title: 'CHƯA CÓ PHIÊN', subtitle: 'Tạo phòng hoặc tham gia bằng mã mời', child: Wrap(spacing: 10, children: [FilledButton(onPressed: _createRoom, child: const Text('Tạo phòng')), OutlinedButton(onPressed: _showJoinDialog, child: const Text('Tham gia'))])) else ...[
-            _panel(title: 'MÃ PHÒNG', subtitle: _roomPin == null ? 'Bạn đã tham gia một phòng' : 'Chia sẻ mã và mã mời tới thiết bị cần kết nối', child: Row(children: [Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))), const Spacer(), if (_roomPin != null) Text('PIN $_roomPin', style: const TextStyle(color: Color(0xFFC3B7FF), fontWeight: FontWeight.w800))])),
+          if (_roomCode == null) _panel(title: _t('no_session'), subtitle: _t('create_or_join'), child: Wrap(spacing: 10, children: [FilledButton(onPressed: _createRoom, child: Text(_t('create_room'))), OutlinedButton(onPressed: _showJoinDialog, child: Text(_t('join_room')))])) else ...[
+            _panel(title: _t('room_code_title'), subtitle: _roomPin == null ? _t('joined_room') : _t('share_codes'), child: Row(children: [Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))), const Spacer(), if (_roomPin != null) Text('PIN $_roomPin', style: const TextStyle(color: Color(0xFFC3B7FF), fontWeight: FontWeight.w800))])),
             const SizedBox(height: 16),
-            Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _sharing ? _stopShare : _startShare, icon: Icon(_sharing ? Icons.stop_circle_outlined : Icons.screen_share_outlined), label: Text(_sharing ? 'Dừng chia sẻ' : 'Chia sẻ màn hình thiết bị này')), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.person_add_alt_1_rounded), label: const Text('Thêm thiết bị'))]),
+            Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _sharing ? _stopShare : _startShare, icon: Icon(_sharing ? Icons.stop_circle_outlined : Icons.screen_share_outlined), label: Text(_sharing ? _t('stop_sharing') : _t('share_this_device'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.person_add_alt_1_rounded), label: Text(_t('add_another_device')))]),
             const SizedBox(height: 16),
-            _panel(title: 'MÀN HÌNH TỪ XA', subtitle: 'Chạm vào hình ảnh để gửi thao tác sau khi được cấp quyền', child: _peers.isEmpty ? const Padding(padding: EdgeInsets.symmetric(vertical: 34), child: Center(child: Text('Đang chờ thiết bị khác tham gia…', style: TextStyle(color: Color(0xFF91A0B7))))) : Column(children: _peers.map(_remoteScreenCard).toList())),
+            _panel(title: _t('remote_screens'), subtitle: _t('tap_after_approval'), child: _peers.isEmpty ? const Padding(padding: EdgeInsets.symmetric(vertical: 34), child: Center(child: Text('Đang chờ thiết bị khác tham gia…', style: TextStyle(color: Color(0xFF91A0B7))))) : Column(children: _peers.map(_remoteScreenCard).toList())),
           ],
         ]),
       );
@@ -695,7 +695,7 @@ class _HomeShellState extends State<HomeShell> {
             decoration: BoxDecoration(color: const Color(0xFF050A12), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF25374E))),
             clipBehavior: Clip.antiAlias,
             child: (!peer.isSharing || peer.renderer?.srcObject == null)
-                ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.screen_search_desktop_rounded, size: 36, color: Color(0xFF60738D)), SizedBox(height: 8), Text('Chưa nhận được hình ảnh', style: TextStyle(color: Color(0xFF8FA0B7), fontSize: 11))]))
+                ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.screen_search_desktop_rounded, size: 36, color: Color(0xFF60738D)), SizedBox(height: 8), Text(_t('no_video'), style: const TextStyle(color: Color(0xFF8FA0B7), fontSize: 11))]))
                 : LayoutBuilder(builder: (context, box) {
                     Offset? swipeStart;
                     final viewport = box.biggest;
@@ -724,22 +724,22 @@ class _HomeShellState extends State<HomeShell> {
                   }),
           ),
           const SizedBox(height: 8),
-          Row(children: [OutlinedButton.icon(onPressed: () => _mesh?.requestControl(peer.id), icon: const Icon(Icons.touch_app_rounded, size: 15), label: const Text('Yêu cầu điều khiển')), const SizedBox(width: 8), const Text('Quyền điều khiển cần được chấp thuận trên thiết bị nhận.', style: TextStyle(color: Color(0xFF7F91A8), fontSize: 9))]),
+          Row(children: [OutlinedButton.icon(onPressed: () => _mesh?.requestControl(peer.id), icon: const Icon(Icons.touch_app_rounded, size: 15), label: Text(_t('request_control'))), const SizedBox(width: 8), Text(_t('approval_hint'), style: const TextStyle(color: Color(0xFF7F91A8), fontSize: 9))]),
         ]),
       );
 
   Widget _buildSettings() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Cài đặt', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          Text(_t('settings_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          const Text('Cấu hình máy chủ ghép nối và quyền riêng tư.', style: TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          Text(_t('settings_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
           const SizedBox(height: 22),
-          _panel(title: 'MTUNZ CORE / SIGNALING', subtitle: 'Máy chủ chỉ chuyển thông tin ghép nối; luồng video ưu tiên P2P', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextField(controller: _serverController, decoration: const InputDecoration(labelText: 'Địa chỉ máy chủ', hintText: 'http://192.168.1.10:8787')), const SizedBox(height: 10), FilledButton(onPressed: _saveServer, child: const Text('Lưu địa chỉ')), const SizedBox(height: 8), const Text('Trên Android, nhập IP LAN của PC đang chạy MTUNZ Signaling Server (ví dụ http://192.168.1.20:8787), không dùng 127.0.0.1. Trên PC cùng máy chạy server có thể dùng http://127.0.0.1:8787. Khi dùng Internet cần HTTPS và TURN.', style: TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5))])),
+          _panel(title: _t('core_title'), subtitle: _t('core_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextField(controller: _serverController, decoration: const InputDecoration(labelText: _t('server_address'), hintText: 'http://192.168.1.10:8787')), const SizedBox(height: 10), FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))), const SizedBox(height: 8), Text(_t('server_help'), style: const TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5))])),
           const SizedBox(height: 16),
-          _panel(title: 'BẢO MẬT ĐIỀU KHIỂN ANDROID', subtitle: 'Chỉ bật quyền hỗ trợ khi bạn hiểu rõ quyền truy cập', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Android cần người dùng tự bật Dịch vụ trợ năng để nhận thao tác chạm từ xa. Mọi yêu cầu điều khiển phải được xác nhận trên điện thoại.', style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: const Text('Mở cài đặt Trợ năng Android'))])),
+          _panel(title: _t('security_title'), subtitle: _t('security_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('accessibility_help'), style: const TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: Text(_t('open_accessibility')))])),
           const SizedBox(height: 16),
-          _panel(title: 'THÔNG TIN PHIÊN BẢN', subtitle: 'Bản phát triển đầu tiên', child: const Row(children: [Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), Spacer(), Text('0.1.2-dev  ·  Native development', style: TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
+          _panel(title: _t('version_title'), subtitle: _t('version_subtitle'), child: const Row(children: [Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), Spacer(), Text('0.1.2-dev  ·  Native development', style: TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
         ]),
       );
 
@@ -766,10 +766,10 @@ class _HomeShellState extends State<HomeShell> {
         backgroundColor: const Color(0xFF0C1423),
         indicatorColor: const Color(0xFF18374A),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard), label: 'Tổng quan'),
-          NavigationDestination(icon: Icon(Icons.devices_outlined), selectedIcon: Icon(Icons.devices), label: 'Thiết bị'),
-          NavigationDestination(icon: Icon(Icons.cast_connected_outlined), selectedIcon: Icon(Icons.cast_connected), label: 'Phiên'),
-          NavigationDestination(icon: Icon(Icons.tune_outlined), selectedIcon: Icon(Icons.tune), label: 'Cài đặt'),
+          NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard), label: _t('nav_overview')),
+          NavigationDestination(icon: Icon(Icons.devices_outlined), selectedIcon: Icon(Icons.devices), label: _t('nav_devices')),
+          NavigationDestination(icon: Icon(Icons.cast_connected_outlined), selectedIcon: Icon(Icons.cast_connected), label: _t('nav_session')),
+          NavigationDestination(icon: Icon(Icons.tune_outlined), selectedIcon: Icon(Icons.tune), label: _t('nav_settings')),
         ],
       );
 }
