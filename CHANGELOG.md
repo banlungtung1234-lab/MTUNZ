@@ -2,20 +2,15 @@
 
 ## 0.3.1-dev — 2026-11-09
 
+- Raise Android minimum SDK from API 23 to API 24 to align with the Flutter 3.47 supported deployment baseline, and compile the Windows native runner against the Windows 10+ API baseline.
+- Expand Windows CI builds to two Windows runner images and preserve both artifacts for release validation.
 - Add Windows IPv4 adapter discovery for Wi-Fi, Ethernet and common Android RNDIS/USB tether network interfaces.
 - Add multiple STUN endpoints and optional coturn TURN REST credentials generated per peer with a short expiry; the TURN shared secret remains server-side.
 - Batch ICE candidates to reduce signaling POSTs and keep the Go signaling queue available under candidate bursts.
-- Increase WebRTC file frames from 16 KiB to 64 KiB, tune data-channel backpressure to a 4/2 MiB high/low watermark, and reduce progress UI updates to 1 MiB intervals.
-- Keep one active incoming receive/save operation to protect mobile memory while improving outgoing transfer throughput.
-- Prefer the Gradle binary distribution download and reuse Gradle dependencies in CI.
-
-## 0.3.1-dev — 2026-11-09
-
-- Raise Android minimum SDK from API 23 to API 24 to align with the Flutter 3.47 supported deployment baseline.
-- Compile the Windows native runner against the Windows 10+ API baseline for Windows 10 and Windows 11.
-- Expand Windows CI builds to two Windows runner images and preserve both artifacts for release validation.
 - Add bounded WebRTC ICE restart and re-negotiation attempts after interrupted peer connections, with deterministic offer ownership to reduce collisions.
-- Serialize incoming file receive/save operations globally to bound memory use on phones and reject over-size streaming sources before sending excess bytes.
+- Increase WebRTC file payloads to 60 KiB while keeping the full frame below the common 64 KiB SCTP message limit; tune data-channel backpressure to a 4/2 MiB high/low watermark and reduce progress UI updates to 1 MiB intervals.
+- Keep one active incoming receive/save operation to protect mobile memory and reject over-size streaming sources before sending excess bytes.
+- Prefer the Gradle binary distribution download and reuse Gradle dependencies in CI.
 - Keep iOS/iPhone out of the current platform build and roadmap scope.
 
 ## 0.3.0-dev — 2026-11-09

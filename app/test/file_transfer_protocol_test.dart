@@ -22,15 +22,16 @@ void main() {
     expect(decoded.payload, payload);
   });
 
-  test('supports a 64 KiB transfer frame at the maximum chunk index', () {
-    expect(FileTransferProtocol.chunkBytes, 64 * 1024);
+  test('keeps the full transfer frame below the common 64 KiB SCTP limit', () {
+    expect(FileTransferProtocol.chunkBytes, 60 * 1024);
     final frame = FileTransferProtocol.encodeChunk(
       transferId: '0123456789abcdef0123456789abcdef',
       index: 0xFFFFFFFF,
       payload: Uint8List(FileTransferProtocol.chunkBytes),
     );
-    expect(frame.length, FileTransferProtocol.headerBytes + 64 * 1024);
-    expect(FileTransferProtocol.decodeChunk(frame)?.payload.length, 64 * 1024);
+    expect(frame.length, FileTransferProtocol.headerBytes + 60 * 1024);
+    expect(frame.length, lessThanOrEqualTo(64 * 1024));
+    expect(FileTransferProtocol.decodeChunk(frame)?.payload.length, 60 * 1024);
   });
 
   test('rejects malformed frames and invalid chunk sizes', () {

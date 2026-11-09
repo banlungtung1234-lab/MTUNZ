@@ -49,7 +49,7 @@ Trên Android, không nhập `127.0.0.1`: địa chỉ đó trỏ về chính đ
 5. Nếu chấp nhận, chọn vị trí lưu trong hộp thoại hệ thống.
 6. Hai bên có thể xem tiến trình truyền và hủy khi đang truyền.
 
-Giới hạn hiện tại là **100 MB cho mỗi tệp**. Bên nhận ghép toàn bộ tệp trong bộ nhớ trước khi mở hộp thoại lưu; MTUNZ chỉ nhận/lưu một tệp tại một thời điểm để hạn chế tăng RAM. Gói truyền dùng chunk 64 KB và hàng đợi gửi có kiểm soát 4/2 MB; tốc độ thực tế vẫn phụ thuộc mạng, CPU và thiết bị nhận.
+Giới hạn hiện tại là **100 MB cho mỗi tệp**. Bên nhận ghép toàn bộ tệp trong bộ nhớ trước khi mở hộp thoại lưu; MTUNZ chỉ nhận/lưu một tệp tại một thời điểm để hạn chế tăng RAM. Gói truyền dùng chunk 60 KB và hàng đợi gửi có kiểm soát 4/2 MB; tốc độ thực tế vẫn phụ thuộc mạng, CPU và thiết bị nhận.
 
 ## 6. Lưu ý khi kiểm thử
 

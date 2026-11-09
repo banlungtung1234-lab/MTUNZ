@@ -15,8 +15,8 @@ class FileTransferChunk {
 
 class FileTransferProtocol {
   static const int maxFileBytes = 100 * 1024 * 1024;
-  // 64 KiB reduces per-message overhead while staying conservative for native SCTP peers.
-  static const int chunkBytes = 64 * 1024;
+  // Keep the full frame (payload + 40-byte header) below SCTP's common 64 KiB message limit.
+  static const int chunkBytes = 60 * 1024;
   static const int headerBytes = 40;
   static const List<int> _magic = [0x4D, 0x54, 0x46, 0x31]; // MTF1
 
