@@ -5,12 +5,14 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_strings.dart';
 
 import 'services/platform_controller.dart';
+import 'services/embedded_signaling_server.dart';
 import 'services/file_transfer_protocol.dart';
 import 'services/rtc_mesh.dart';
 import 'services/signaling_client.dart';
@@ -120,11 +122,15 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  final _serverController = TextEditingController(text: Platform.isAndroid ? '' : 'http://127.0.0.1:8787');
+  final _serverController = TextEditingController();
+  final EmbeddedSignalingServer _embeddedCore = EmbeddedSignalingServer();
   final _codeController = TextEditingController();
   final _pinController = TextEditingController();
   int _selectedIndex = 0;
-  String _serverUrl = Platform.isAndroid ? '' : 'http://127.0.0.1:8787';
+  String _serverUrl = '';
+  bool _coreStarting = false;
+  bool _usesEmbeddedCore = true;
+  String? _coreError;
   String _statusKey = 'status_not_connected';
   int _connectedPeerCount = 0;
   String get _statusText => _statusKey == 'status_connected_count'
@@ -149,11 +155,46 @@ class _HomeShellState extends State<HomeShell> {
       AppStrings.text(widget.locale.languageCode, key, values);
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_startEmbeddedCore());
+  }
+
+  Future<void> _startEmbeddedCore() async {
+    if (_coreStarting || _embeddedCore.isRunning) return;
+    if (mounted) setState(() => _coreStarting = true);
+    try {
+      // Port 8787 is preferred for predictable LAN sharing. If another app
+      // already owns it, the embedded Core safely uses an available port.
+      await _embeddedCore.start(preferredPort: 8787);
+      if (!mounted) return;
+      final localUrl = _embeddedCore.localUri.toString();
+      setState(() {
+        if (_serverUrl.isEmpty || _usesEmbeddedCore) {
+          _serverUrl = localUrl;
+          _serverController.text = localUrl;
+          _usesEmbeddedCore = true;
+        }
+        _coreError = null;
+        _coreStarting = false;
+      });
+      await _scanNetworkInterfaces();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _coreError = '$error';
+        _coreStarting = false;
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _serverController.dispose();
     _codeController.dispose();
     _pinController.dispose();
     unawaited(_disconnect().catchError((_) {}));
+    unawaited(_embeddedCore.close());
     super.dispose();
   }
 
@@ -179,6 +220,7 @@ class _HomeShellState extends State<HomeShell> {
           _notice = 'notice_room_ready';
           _noticeIsKey = true;
         });
+        await _scanNetworkInterfaces();
         _showInvite(invite);
       } catch (_) {
         if (!attached) await client.leave();
@@ -475,27 +517,98 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _showInvite(RoomInvite invite) {
+    final endpoints = _usesEmbeddedCore
+        ? _networkEndpoints.take(6).toList(growable: false)
+        : const <NetworkEndpoint>[];
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(_t('room_created')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_t('invite_instructions')),
-            const SizedBox(height: 18),
-            _CodeTile(label: _t('room_code'), value: invite.code),
-            const SizedBox(height: 10),
-            _CodeTile(label: _t('invite_pin'), value: invite.pin),
-            const SizedBox(height: 10),
-            Text(_t('room_expires', {'minutes': '${invite.expiresInSeconds ~/ 60}'}), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60)),
-          ],
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_t('invite_instructions')),
+                const SizedBox(height: 18),
+                _CodeTile(label: _t('room_code'), value: invite.code),
+                const SizedBox(height: 10),
+                _CodeTile(label: _t('invite_pin'), value: invite.pin),
+                const SizedBox(height: 10),
+                Text(
+                  _t('room_expires', {'minutes': '${invite.expiresInSeconds ~/ 60}'}),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60),
+                ),
+                const SizedBox(height: 18),
+                const Divider(color: Color(0xFF293A55)),
+                const SizedBox(height: 8),
+                const Text(
+                  'ĐỊA CHỈ CORE ĐỂ THIẾT BỊ KHÁC KẾT NỐI',
+                  style: TextStyle(color: Color(0xFF67DDEC), fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                if (!_usesEmbeddedCore)
+                  _copyEndpointTile(_serverUrl, 'Máy chủ ghép nối đã cấu hình')
+                else if (endpoints.isEmpty)
+                  const Text(
+                    'Không tìm thấy IPv4 LAN. Hãy bật Wi-Fi, Ethernet hoặc USB tethering rồi thử quét lại.',
+                    style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 11),
+                  )
+                else
+                  for (final endpoint in endpoints)
+                    _copyEndpointTile(
+                      'http://${endpoint.address}:${_embeddedCore.port}',
+                      '${_networkKindLabel(endpoint.kind)} · ${endpoint.interfaceName}',
+                    ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Thiết bị còn lại cần nhập một địa chỉ ở trên trong hộp thoại tham gia phòng. Không dùng 127.0.0.1 trên thiết bị khác.',
+                  style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 10, height: 1.4),
+                ),
+              ],
+            ),
+          ),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(_t('close')))],
       ),
     );
   }
+
+  Widget _copyEndpointTile(String url, String label) => Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0C1728),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF263B56)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.lan_rounded, size: 17, color: Color(0xFF55DDF2)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 9)),
+                  SelectableText(url, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Sao chép địa chỉ',
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: url));
+                _showSnack('Đã sao chép địa chỉ Core.');
+              },
+              icon: const Icon(Icons.copy_rounded, size: 16),
+            ),
+          ],
+        ),
+      );
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -510,10 +623,19 @@ class _HomeShellState extends State<HomeShell> {
       builder: (context) => AlertDialog(
         title: Text(_t('join_device_title')),
         content: SizedBox(
-          width: 380,
+          width: 400,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TextField(
+                controller: _serverController,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Địa chỉ Core của thiết bị tạo phòng',
+                  hintText: 'http://192.168.1.20:8787',
+                ),
+              ),
+              const SizedBox(height: 10),
               TextField(controller: _codeController, textCapitalization: TextCapitalization.characters, maxLength: 8, decoration: InputDecoration(labelText: _t('room_code'), hintText: _t('room_code_hint'))),
               const SizedBox(height: 10),
               TextField(controller: _pinController, keyboardType: TextInputType.number, maxLength: 6, decoration: InputDecoration(labelText: _t('invite_pin'), hintText: _t('pin_hint'))),
@@ -522,7 +644,14 @@ class _HomeShellState extends State<HomeShell> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(_t('cancel'))),
-          FilledButton(onPressed: () { Navigator.pop(context); unawaited(_joinRoom()); }, child: Text(_t('connect'))),
+          FilledButton(
+            onPressed: () {
+              if (!_saveServer(showNotice: false)) return;
+              Navigator.pop(context);
+              unawaited(_joinRoom());
+            },
+            child: Text(_t('connect')),
+          ),
         ],
       ),
     );
@@ -564,23 +693,641 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _useNetworkAddress(NetworkEndpoint endpoint) {
-    _serverController.text = 'http://${endpoint.address}:8787';
+    if (!_embeddedCore.isRunning) {
+      _showSnack('MTUNZ Core chưa sẵn sàng.');
+      return;
+    }
+    _serverController.text = 'http://${endpoint.address}:${_embeddedCore.port}';
     _saveServer();
   }
 
-  void _saveServer() {
+  bool _saveServer({bool showNotice = true}) {
     final raw = _serverController.text.trim();
     final uri = Uri.tryParse(raw);
     final validScheme = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
     final validPort = uri != null && (!uri.hasPort || (uri.port >= 1 && uri.port <= 65535));
     if (uri == null || !uri.hasScheme || !validScheme || uri.host.isEmpty ||
         uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment || !validPort) {
-      _showSnack(_t('server_invalid'));
-      return;
+      if (showNotice) _showSnack(_t('server_invalid'));
+      return false;
     }
-    final normalized = uri.replace(path: uri.path.replaceFirst(RegExp(r'/$'), '')).toString();
-    setState(() => _serverUrl = normalized);
-    _showSnack(_t('server_saved'));
+    final normalized = uri.replace(path: uri.path.replaceFirst(RegExp(r'/
+
+  @override
+  Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final pages = [
+      _buildOverview(),
+      _buildDevices(),
+      _buildSession(),
+      _buildSettings(),
+      _buildFiles(),
+    ];
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: [
+            if (wide) _buildSideRail(),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildTopBar(wide),
+                  Expanded(child: IndexedStack(index: _selectedIndex, children: pages)),
+                  if (_notice.isNotEmpty) _buildNoticeBar(),
+                  if (!wide) _buildBottomBar(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideRail() => Container(
+        width: 232,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF101C2F), Color(0xFF0A1220)]),
+          border: Border(right: BorderSide(color: Color(0xFF1D2A40))),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 22, 12, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _brand(),
+            const SizedBox(height: 38),
+            _navItem(0, Icons.space_dashboard_rounded, _t('nav_overview')),
+            _navItem(1, Icons.devices_rounded, _t('nav_devices')),
+            _navItem(2, Icons.cast_connected_rounded, _t('nav_session')),
+            _navItem(3, Icons.tune_rounded, _t('nav_settings')),
+            _navItem(4, Icons.folder_copy_rounded, _t('nav_files')),
+            const Spacer(),
+            _connectionCard(),
+          ],
+        ),
+      );
+
+  Widget _brand() => Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              gradient: const LinearGradient(colors: [Color(0xFF31D6F3), Color(0xFF706BFF)]),
+              boxShadow: [BoxShadow(color: const Color(0xFF31D6F3).withValues(alpha: .18), blurRadius: 22)],
+            ),
+            child: const Icon(Icons.hub_rounded, color: Color(0xFF07111F), size: 24),
+          ),
+          const SizedBox(width: 12),
+          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19, letterSpacing: 2.4)),
+            Text('DEVICE NETWORK', style: TextStyle(color: Color(0xFF8393AD), fontSize: 8, letterSpacing: 1.8)),
+          ]),
+        ],
+      );
+
+  Widget _navItem(int index, IconData icon, String label) {
+    final selected = _selectedIndex == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _selectedIndex = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFF13283B) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? const Color(0xFF1C5165) : Colors.transparent),
+          ),
+          child: Row(children: [
+            Icon(icon, size: 19, color: selected ? const Color(0xFF49DDF4) : const Color(0xFF8290A7)),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(color: selected ? Colors.white : const Color(0xFF99A7BD), fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _connectionCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: const Color(0xFF101F30), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF1D3B50))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [const Icon(Icons.circle, color: Color(0xFF36D6A0), size: 8), const SizedBox(width: 8), Text(_statusText, style: const TextStyle(fontSize: 11, color: Color(0xFFB7C7D8))) ]),
+          const SizedBox(height: 9),
+          const Text('MTUNZ Core', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          Text(_serverUrl, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Color(0xFF70839B))),
+        ]),
+      );
+
+  Widget _buildTopBar(bool wide) => Padding(
+        padding: EdgeInsets.fromLTRB(wide ? 28 : 18, 18, wide ? 28 : 18, 12),
+        child: Row(children: [
+          if (!wide) _brand(),
+          if (!wide) const Spacer(),
+          if (wide) Expanded(child: Text(_t('workspace'), style: const TextStyle(color: Color(0xFF8191A8), fontSize: 10, letterSpacing: 1.8))),
+          _statusPill(),
+        ]),
+      );
+
+  Widget _statusPill() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: const Color(0xFF10261F), border: Border.all(color: const Color(0xFF245240)), borderRadius: BorderRadius.circular(30)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.circle, color: Color(0xFF43D7A5), size: 7), const SizedBox(width: 8), Text(_statusText, style: const TextStyle(fontSize: 11, color: Color(0xFFBAE9D7))) ]),
+      );
+
+  Widget _buildOverview() => LayoutBuilder(builder: (context, constraints) {
+        final wide = constraints.maxWidth > 760;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 26),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_t('overview_title'), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -.7)),
+            const SizedBox(height: 8),
+            Text(_t('overview_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 13)),
+            const SizedBox(height: 25),
+            _heroCard(),
+            const SizedBox(height: 18),
+            if (wide) Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _quickActions()), const SizedBox(width: 16), Expanded(child: _connectedCard())]) else ...[_quickActions(), const SizedBox(height: 16), _connectedCard()],
+            const SizedBox(height: 18),
+            _featureStrip(),
+          ]),
+        );
+      });
+
+  Widget _heroCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF143449), Color(0xFF171C3B), Color(0xFF121A2D)]),
+          border: Border.all(color: const Color(0xFF23536A)),
+        ),
+        child: Stack(children: [
+          Positioned(right: -12, top: -22, child: Icon(Icons.hub_rounded, size: 170, color: Colors.white.withValues(alpha: .035))),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [const Icon(Icons.bolt_rounded, color: Color(0xFF52E1F5), size: 18), const SizedBox(width: 7), Text(_t('cross_device'), style: const TextStyle(color: Color(0xFF8EEBFA), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.6))]),
+            const SizedBox(height: 18),
+            Text(_t('hero_title'), style: const TextStyle(fontSize: 29, height: 1.12, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Text(_t('hero_subtitle'), style: const TextStyle(color: Color(0xFFB4C7D8), fontSize: 12, height: 1.5)),
+            const SizedBox(height: 20),
+            Wrap(spacing: 10, runSpacing: 9, children: [
+              FilledButton.icon(onPressed: _busy ? null : _createRoom, icon: const Icon(Icons.add_link_rounded, size: 18), label: Text(_t('create_room'))),
+              OutlinedButton.icon(onPressed: _busy ? null : _showJoinDialog, icon: const Icon(Icons.login_rounded, size: 17), label: Text(_t('enter_room'))),
+            ]),
+          ]),
+        ]),
+      );
+
+  Widget _quickActions() => _panel(
+        title: _t('quick_access'),
+        subtitle: _t('common_actions'),
+        child: Column(children: [
+          _actionRow(Icons.cast_connected_rounded, _t('screen_share'), _t('screen_share_desc'), _sharing ? _t('sharing') : _t('start'), _sharing ? _stopShare : _startShare),
+          const Divider(height: 22, color: Color(0xFF24334A)),
+          _actionRow(Icons.devices_rounded, _t('nav_devices'), _t('devices_in_session', {'count': '${_peers.length}'}), _t('view'), () => setState(() => _selectedIndex = 1)),
+          const Divider(height: 22, color: Color(0xFF24334A)),
+          _actionRow(Icons.qr_code_2_rounded, _t('pair_device'), _t('create_invite'), _t('create_room'), _createRoom),
+        ]),
+      );
+
+  Widget _connectedCard() => _panel(
+        title: _t('devices_in_room'),
+        subtitle: _t('room_limit_subtitle'),
+        child: _peers.isEmpty
+            ? Padding(padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [const Icon(Icons.devices_other_rounded, color: Color(0xFF62748D), size: 32), const SizedBox(width: 13), Expanded(child: Text(_t('no_devices'), style: const TextStyle(color: Color(0xFF93A2B7), fontSize: 12, height: 1.45))) ]))
+            : Column(children: _peers.map(_peerRow).toList()),
+      );
+
+  Widget _featureStrip() => Wrap(spacing: 10, runSpacing: 10, children: [
+        _miniFeature(Icons.hd_rounded, _t('feature_webrtc')),
+        _miniFeature(Icons.lock_outline_rounded, _t('feature_approval')),
+        _miniFeature(Icons.hub_rounded, _t('feature_limit')),
+      ]);
+
+  Widget _miniFeature(IconData icon, String text) => Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), decoration: BoxDecoration(color: const Color(0xFF101A2A), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF223149))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 15, color: const Color(0xFF49DDF4)), const SizedBox(width: 8), Text(text, style: const TextStyle(fontSize: 10, color: Color(0xFF9EADC1))) ]));
+
+  Widget _buildDevices() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_t('devices_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(_t('devices_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          const SizedBox(height: 22),
+          _panel(title: _t('current_session'), subtitle: _t('three_device_limit'), child: _peers.isEmpty ? Text(_t('no_remote_devices'), style: const TextStyle(color: Color(0xFF91A0B7))) : Column(children: _peers.map(_peerRow).toList())),
+          const SizedBox(height: 16),
+          _panel(title: _t('add_device'), subtitle: _t('temporary_room'), child: Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _createRoom, icon: const Icon(Icons.add), label: Text(_t('create_room'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.login), label: Text(_t('join_room')))])),
+        ]),
+      );
+
+  Widget _peerRow(PeerView peer) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF172C42), borderRadius: BorderRadius.circular(12)), child: Icon(peer.name.toLowerCase().contains('android') ? Icons.smartphone_rounded : Icons.laptop_mac_rounded, color: const Color(0xFF52DDF2))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), Text(_peerStateLabel(peer.state), style: const TextStyle(color: Color(0xFF8193AA), fontSize: 10))])),
+          const Icon(Icons.circle, color: Color(0xFF41D6A0), size: 8),
+        ]),
+      );
+
+  Widget _buildSession() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('session_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), const SizedBox(height: 7), Text(_t('session_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: Text(_t('disconnect')))]),
+          const SizedBox(height: 20),
+          if (_roomCode == null) _panel(title: _t('no_session'), subtitle: _t('create_or_join'), child: Wrap(spacing: 10, children: [FilledButton(onPressed: _createRoom, child: Text(_t('create_room'))), OutlinedButton(onPressed: _showJoinDialog, child: Text(_t('join_room')))])) else ...[
+            _panel(title: _t('room_code_title'), subtitle: _roomPin == null ? _t('joined_room') : _t('share_codes'), child: Row(children: [Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))), const Spacer(), if (_roomPin != null) Text('PIN $_roomPin', style: const TextStyle(color: Color(0xFFC3B7FF), fontWeight: FontWeight.w800))])),
+            const SizedBox(height: 16),
+            Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _sharing ? _stopShare : _startShare, icon: Icon(_sharing ? Icons.stop_circle_outlined : Icons.screen_share_outlined), label: Text(_sharing ? _t('stop_sharing') : _t('share_this_device'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.person_add_alt_1_rounded), label: Text(_t('add_another_device')))]),
+            const SizedBox(height: 16),
+            _panel(title: _t('remote_screens'), subtitle: _t('tap_after_approval'), child: _peers.isEmpty ? Padding(padding: const EdgeInsets.symmetric(vertical: 34), child: Center(child: Text(_t('waiting_peer'), style: const TextStyle(color: Color(0xFF91A0B7))))) : Column(children: _peers.map(_remoteScreenCard).toList())),
+          ],
+        ]),
+      );
+
+  ({double x, double y})? _mapPointToRemoteVideo(
+    RTCVideoRenderer renderer,
+    Offset point,
+    Size viewport,
+  ) {
+    final sourceWidth = renderer.videoWidth.toDouble();
+    final sourceHeight = renderer.videoHeight.toDouble();
+    if (sourceWidth <= 0 || sourceHeight <= 0 || viewport.isEmpty) return null;
+
+    // RTCVideoView uses contain-fit, so remove the letterbox before mapping
+    // taps and swipes to the remote display's normalized coordinates.
+    final scale = math.min(viewport.width / sourceWidth, viewport.height / sourceHeight);
+    final renderedWidth = sourceWidth * scale;
+    final renderedHeight = sourceHeight * scale;
+    final left = (viewport.width - renderedWidth) / 2;
+    final top = (viewport.height - renderedHeight) / 2;
+    final x = (point.dx - left) / renderedWidth;
+    final y = (point.dy - top) / renderedHeight;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return (x: x, y: y);
+  }
+
+  String _peerStateLabel(String state) => state.replaceFirst('RTCPeerConnectionState.', '');
+
+  Widget _remoteScreenCard(PeerView peer) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Expanded(child: Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700))), Text(_peerStateLabel(peer.state), style: const TextStyle(fontSize: 10, color: Color(0xFF90A1B8)))]),
+          const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            height: 280,
+            decoration: BoxDecoration(color: const Color(0xFF050A12), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF25374E))),
+            clipBehavior: Clip.antiAlias,
+            child: (!peer.isSharing || peer.renderer?.srcObject == null)
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.screen_search_desktop_rounded, size: 36, color: Color(0xFF60738D)), const SizedBox(height: 8), Text(_t('no_video'), style: const TextStyle(color: Color(0xFF8FA0B7), fontSize: 11))]))
+                : LayoutBuilder(builder: (context, box) {
+                    Offset? swipeStart;
+                    final viewport = box.biggest;
+                    return GestureDetector(
+                      onTapUp: (details) {
+                        final point = _mapPointToRemoteVideo(peer.renderer!, details.localPosition, viewport);
+                        if (point != null) _mesh?.sendTap(peer.id, point.x, point.y);
+                      },
+                      onPanStart: (details) {
+                        swipeStart = _mapPointToRemoteVideo(peer.renderer!, details.localPosition, viewport) == null
+                            ? null
+                            : details.localPosition;
+                      },
+                      onPanEnd: (details) {
+                        final start = swipeStart;
+                        swipeStart = null;
+                        if (start == null) return;
+                        final from = _mapPointToRemoteVideo(peer.renderer!, start, viewport);
+                        final to = _mapPointToRemoteVideo(peer.renderer!, details.localPosition, viewport);
+                        if (from != null && to != null) {
+                          _mesh?.sendSwipe(peer.id, from.x, from.y, to.x, to.y);
+                        }
+                      },
+                      child: RTCVideoView(peer.renderer!, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain),
+                    );
+                  }),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [OutlinedButton.icon(onPressed: () => _mesh?.requestControl(peer.id), icon: const Icon(Icons.touch_app_rounded, size: 15), label: Text(_t('request_control'))), const SizedBox(width: 8), Text(_t('approval_hint'), style: const TextStyle(color: Color(0xFF7F91A8), fontSize: 9))]),
+        ]),
+      );
+
+  Widget _buildFiles() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_t('files_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(_t('files_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          const SizedBox(height: 22),
+          _panel(
+            title: _t('files_transfer_title'),
+            subtitle: _t('files_transfer_subtitle'),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (_peers.isEmpty)
+                Text(_t('files_no_devices'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))
+              else ...[
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_selectedFilePeerId),
+                  initialValue: _selectedFilePeerId,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: _t('files_peer_label'),
+                    prefixIcon: const Icon(Icons.devices_rounded),
+                  ),
+                  items: _peers.map((peer) => DropdownMenuItem<String>(
+                    value: peer.id,
+                    child: Text(peer.name, overflow: TextOverflow.ellipsis),
+                  )).toList(),
+                  onChanged: (value) => setState(() => _selectedFilePeerId = value),
+                ),
+                const SizedBox(height: 13),
+                FilledButton.icon(
+                  onPressed: _filePickerBusy || !_peers.any((peer) => peer.id == _selectedFilePeerId && peer.canSendFile)
+                      ? null
+                      : _startFileTransfer,
+                  icon: _filePickerBusy
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.upload_file_rounded, size: 18),
+                  label: Text(_t('files_choose_send')),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(_t('files_transfer_rule'), style: const TextStyle(color: Color(0xFF8FA2BA), fontSize: 10, height: 1.5)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _panel(
+            title: _t('files_history_title'),
+            subtitle: _t('files_history_subtitle'),
+            child: _fileTransfers.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(children: [
+                      const Icon(Icons.folder_open_rounded, color: Color(0xFF687D97), size: 30),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_t('files_empty'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))),
+                    ]),
+                  )
+                : Column(children: _fileTransfers.map(_fileTransferCard).toList()),
+          ),
+        ]),
+      );
+
+  Widget _fileTransferCard(FileTransferView transfer) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(
+              transfer.isOutgoing ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              color: const Color(0xFF53DDF2),
+              size: 18,
+            ),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(transfer.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              Text(
+                '${transfer.isOutgoing ? _t('files_to') : _t('files_from')} ${transfer.peerName} · ${_formatBytes(transfer.size)}',
+                style: const TextStyle(color: Color(0xFF8395AD), fontSize: 10),
+              ),
+            ])),
+            Text(_fileStatusLabel(transfer.status), style: const TextStyle(color: Color(0xFF9AB0C7), fontSize: 10)),
+            if (transfer.canCancel)
+              IconButton(
+                tooltip: _t('files_cancel'),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _mesh?.cancelFileTransfer(transfer.id),
+                icon: const Icon(Icons.close_rounded, size: 17),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: transfer.progress,
+            minHeight: 5,
+            borderRadius: BorderRadius.circular(8),
+            backgroundColor: const Color(0xFF23334A),
+          ),
+          const SizedBox(height: 5),
+          Text('${_formatBytes(transfer.transferred)} / ${_formatBytes(transfer.size)}',
+              style: const TextStyle(color: Color(0xFF7589A3), fontSize: 9)),
+          const Divider(height: 18, color: Color(0xFF24334A)),
+        ]),
+      );
+
+  Widget _buildSettings() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_t('settings_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(_t('settings_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          const SizedBox(height: 22),
+          _panel(title: _t('language_title'), subtitle: _t('language_subtitle'), child: DropdownButtonFormField<String>(
+            key: ValueKey(widget.locale.languageCode),
+            initialValue: widget.locale.languageCode,
+            decoration: InputDecoration(labelText: _t('language_label'), prefixIcon: const Icon(Icons.translate_rounded)),
+            dropdownColor: const Color(0xFF16243A),
+            isExpanded: true,
+            items: AppStrings.languages.entries.map((entry) => DropdownMenuItem<String>(
+              value: entry.key,
+              child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+            )).toList(),
+            onChanged: (code) {
+              if (code == null) return;
+              widget.onLocaleChanged(Locale(code));
+              _showSnack(AppStrings.text(code, 'language_saved'));
+            },
+          )),
+          const SizedBox(height: 16),
+          _panel(
+            title: _t('core_title'),
+            subtitle: 'CORE TÍCH HỢP · WINDOWS + ANDROID',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _embeddedCore.isRunning ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                      color: _embeddedCore.isRunning ? const Color(0xFF37D6B2) : const Color(0xFFFF7786),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _coreStarting
+                            ? 'Đang khởi động MTUNZ Core…'
+                            : _embeddedCore.isRunning
+                                ? 'Core đang chạy trong ứng dụng · cổng ${_embeddedCore.port}'
+                                : 'Core chưa hoạt động',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFFB8C9DE)),
+                      ),
+                    ),
+                    if (!_embeddedCore.isRunning)
+                      TextButton(onPressed: _coreStarting ? null : _startEmbeddedCore, child: const Text('Thử lại')),
+                  ],
+                ),
+                if (_coreError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(_coreError!, style: const TextStyle(color: Color(0xFFFF8895), fontSize: 10)),
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _serverController,
+                  keyboardType: TextInputType.url,
+                  decoration: InputDecoration(labelText: _t('server_address'), hintText: 'http://192.168.1.20:${_embeddedCore.port == 0 ? 8787 : _embeddedCore.port}'),
+                ),
+                const SizedBox(height: 10),
+                FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))),
+                const SizedBox(height: 8),
+                const Text(
+                  'Core được tích hợp và tự khởi động cùng MTUNZ. Khi tạo phòng, hãy gửi địa chỉ LAN hiển thị trong mã mời cho thiết bị còn lại. Để kết nối qua Internet khác mạng, cần máy chủ HTTPS/TURN bên ngoài.',
+                  style: TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _panel(
+            title: _t('network_links_title'),
+            subtitle: _t('network_links_subtitle'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: _networkScanBusy ? null : _scanNetworkInterfaces,
+                    icon: _networkScanBusy
+                        ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.radar_rounded, size: 17),
+                    label: Text(_t('network_scan')),
+                  ),
+                ),
+                if (_networkEndpoints.isEmpty && !_networkScanBusy)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(_t('network_none'), style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 11)),
+                  ),
+                for (final endpoint in _networkEndpoints)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0C1728),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF263B56)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          endpoint.kind == NetworkLinkKind.wired
+                              ? Icons.cable_rounded
+                              : endpoint.kind == NetworkLinkKind.wifi
+                                  ? Icons.wifi_rounded
+                                  : Icons.lan_rounded,
+                          color: const Color(0xFF55DDF2),
+                          size: 19,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(endpoint.interfaceName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                              Text(
+                                '${_networkKindLabel(endpoint.kind)} · ${endpoint.address}:${_embeddedCore.port}',
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF8FA1B9)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _useNetworkAddress(endpoint),
+                          child: Text(_t('network_use_address'), style: const TextStyle(fontSize: 10)),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Chọn địa chỉ LAN của thiết bị đang tạo phòng. Android USB tethering chỉ hoạt động khi Windows nhìn thấy adapter RNDIS và hai thiết bị định tuyến được tới nhau.',
+                  style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 10, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _panel(title: _t('security_title'), subtitle: _t('security_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('accessibility_help'), style: const TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: Text(_t('open_accessibility')))])),
+          const SizedBox(height: 16),
+          _panel(title: _t('version_title'), subtitle: _t('version_subtitle'), child: Row(children: [const Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), const Spacer(), Text(_t('development_build'), style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
+        ]),
+      );
+
+  Widget _panel({required String title, required String subtitle, required Widget child}) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF142137), Color(0xFF101827)]),
+          border: Border.all(color: const Color(0xFF293A55)),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .16), blurRadius: 22, offset: const Offset(0, 9))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 10, letterSpacing: 1.4, color: Color(0xFF67DDEC), fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF8294AC))),
+          const SizedBox(height: 15),
+          child,
+        ]),
+      );
+
+  Widget _actionRow(IconData icon, String title, String detail, String action, VoidCallback onTap) => Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: const Color(0xFF172C42), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: const Color(0xFF56DDF3), size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)), Text(detail, style: const TextStyle(fontSize: 10, color: Color(0xFF8395AD)))])), TextButton(onPressed: onTap, child: Text(action))]);
+
+  Widget _buildNoticeBar() => Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8), decoration: const BoxDecoration(color: Color(0xFF0D1727), border: Border(top: BorderSide(color: Color(0xFF1E2B40)))), child: Row(children: [const Icon(Icons.info_outline_rounded, color: Color(0xFF4DDCF2), size: 14), const SizedBox(width: 8), Expanded(child: Text(_noticeIsKey ? _t(_notice) : _notice, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF92A3B9), fontSize: 10))) ]));
+
+  Widget _buildBottomBar() => NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+        backgroundColor: const Color(0xFF0C1423),
+        indicatorColor: const Color(0xFF18374A),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard), label: _t('nav_overview')),
+          NavigationDestination(icon: const Icon(Icons.devices_outlined), selectedIcon: const Icon(Icons.devices), label: _t('nav_devices')),
+          NavigationDestination(icon: const Icon(Icons.cast_connected_outlined), selectedIcon: const Icon(Icons.cast_connected), label: _t('nav_session')),
+          NavigationDestination(icon: const Icon(Icons.tune_outlined), selectedIcon: const Icon(Icons.tune), label: _t('nav_settings')),
+          NavigationDestination(icon: const Icon(Icons.folder_copy_outlined), selectedIcon: const Icon(Icons.folder_copy), label: _t('nav_files')),
+        ],
+      );
+}
+
+class _CodeTile extends StatelessWidget {
+  const _CodeTile({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(color: const Color(0xFF0B1422), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF263951))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Color(0xFF7F95AE), fontSize: 9, letterSpacing: 1.4)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 22, letterSpacing: 3, fontWeight: FontWeight.w900, color: Color(0xFF5BE2F5)))]),
+      );
+}
+), '')).toString();
+    final localHost = uri.host == '127.0.0.1' ||
+        uri.host == 'localhost' ||
+        _networkEndpoints.any((endpoint) => endpoint.address == uri.host);
+    setState(() {
+      _serverUrl = normalized;
+      _usesEmbeddedCore = _embeddedCore.isRunning && uri.port == _embeddedCore.port && localHost;
+    });
+    if (showNotice) _showSnack(_t('server_saved'));
+    return true;
   }
 
   @override
