@@ -62,6 +62,7 @@ These steps apply after the Android APK and Windows desktop package have been bu
 5. Create a room on one device. Enter its room code and PIN on the other.
 6. Start screen sharing on the device whose screen should be viewed. Android will show its system sharing-consent screen.
 7. To control Android, the Android owner must enable MTUNZ Accessibility under Android Settings and approve the control request.
+8. To transfer a file, open **Files** in MTUNZ, choose the connected device and select a file. The receiving device must approve the incoming request and choose a save location. Each file is limited to 100 MB.
 
 Both devices must be on the same Wi-Fi for this first test. If the room connects but the video does not, the network may block direct P2P; TURN relay is the next networking milestone.
 
