@@ -1,69 +1,67 @@
-# MTUNZ 0.1.1-dev — build and validation status
+# MTUNZ 0.1.2-dev — build and validation status
 
-## Latest CI release build: PASS
+## CI result: PASS
 
-- **Commit:** `c13f0d182d930e125cd8786faee6de66718a0df6`
-- **GitHub Actions run:** [Build MTUNZ native apps #7](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42500358591)
-- **Overall result:** success
+- **Source tree:** `cc2a0192e7280dbe79c16f590ebf9a67d632a8b5`
+- **Merged main commit:** `0b3e4661b58dc53d2847fa82757c23a942002350`
+- **Tested GitHub Actions run:** [Build MTUNZ native apps](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42565549426)
+- **Run result:** success; Android, Windows and Go server jobs completed successfully.
 - **Flutter:** 3.47.9 stable
 - **Go:** 1.27.3
 
-### Build outputs (uploaded as GitHub Actions artifacts; 30-day retention)
+The tested PR commit and merged main commit have the same Git tree SHA, so the binaries below were built from exactly the source tree now on `main`.
 
-| Artifact | Result | Contents |
+## Build outputs
+
+| Artifact | Result | Inspection |
 |---|---|---|
-| `MTUNZ-Android-APK` | PASS | Release APK (`app-release.apk`) |
-| `MTUNZ-Windows-x64` | PASS | Portable Windows release ZIP with `MTUNZ.exe`, Flutter runtime and WebRTC DLLs |
-| `MTUNZ-Signaling-Windows` | PASS | Windows x64 signaling-server executable |
+| Android APK | PASS | Valid APK archive; native ABIs arm64-v8a, armeabi-v7a and x86_64 |
+| Windows desktop | PASS | ZIP integrity; contains `MTUNZ.exe`, Flutter runtime, WebRTC DLL and app data |
+| Signaling server | PASS | PE32+ Windows x86-64 executable |
 
-### CI checks
+The individual Actions artifacts are retained for 30 days from the CI run. A combined installation pack was also assembled and checked separately; it includes the APK, Windows portable ZIP, signaling EXE, LAN startup BAT, Vietnamese installation guide and SHA-256 manifest.
 
-- `flutter analyze`: PASS on Android and Windows.
-- `flutter test`: PASS on Android and Windows.
-- `flutter build apk --release`: PASS.
-- `flutter build windows --release`: PASS.
-- `go test -race ./...`: PASS.
-- `go vet ./...`: PASS.
-- Windows signaling server cross-compile: PASS.
+## CI checks
 
-### Post-build artifact inspection
+- Android: `flutter analyze`, `flutter test`, `flutter build apk --release` — PASS.
+- Windows: `flutter analyze`, `flutter test`, `flutter build windows --release`, ZIP packaging — PASS.
+- Signaling server: `go test -race ./...`, `go vet ./...`, Windows x64 cross-compile — PASS.
 
-The three Actions artifacts were downloaded into a separate validation environment.
+Regression coverage added for:
+- A new empty invitation room remains available until its TTL expires.
+- An idle peer is removed after its 90-second lease, the blocked long-poll is released, and remaining peers receive `peer-left`.
+- An expired room releases blocked peer pollers.
 
-- Android APK: recognized as an Android package; archive integrity passed. It contains native libraries for `arm64-v8a`, `armeabi-v7a` and `x86_64`.
-- Windows desktop ZIP: archive integrity passed; contains `MTUNZ.exe`, `flutter_windows.dll`, `libwebrtc.dll`, `flutter_webrtc_plugin.dll`, `dartjni.dll` and application data.
-- Signaling artifact: archive integrity passed; executable identified as PE32+ Windows x86-64.
-- Combined installation ZIP: SHA-256 manifest verification and ZIP integrity passed.
+## Reliability changes in 0.1.2-dev
 
-## Local development-container checks
-
-- Go signaling-server tests passed with `go test -race ./...`; statement coverage was 68.0% in the local Go 1.23.2 environment.
-- `go vet ./...` passed.
-- Live HTTP integration checks covered health/version response, room creation, two-device join, offer signaling, authenticated long-poll delivery, invalid PIN rejection and third/fourth-device capacity behavior.
-- `prepare-flutter-project.sh` and `inject-windows-controller.py` passed shell/Python syntax checks. The project-preparation script was also exercised in an isolated temporary project against mock Flutter CLI outputs for Gradle Kotlin DSL and Groovy. This mock check is supplemental; the real builds above are the authoritative compile results.
-- Android manifest and Accessibility XML parsed successfully.
+- Each successful authenticated long-poll refreshes a peer's presence lease.
+- The server performs cleanup every 15 seconds and expires peers idle for more than 90 seconds.
+- Removing an idle peer releases its pending poll and notifies the other room members.
+- The client uses bounded exponential retry backoff (500 ms to 4 seconds), avoids repeated outage notices, and reports signaling recovery or terminal session errors.
+- Build and test checks now run on pull requests as well as source pushes to main.
 
 ## Still requires real-device validation
 
-The app has been compiled and unit/widget-tested, but the following behavior has not yet been verified on the user's physical Windows PC and Nubia Neo 2:
+CI confirms source analysis, tests and native compilation; it does **not** prove real-world remote control is stable on the user's devices. The following still need to be tested on a physical Windows PC and Android phone:
 
 - First installation and startup on the target devices.
-- Android MediaProjection consent and screen-capture stability on the target OS.
-- Accessibility-service enablement and tap/swipe behavior on the target phone.
-- Real Windows remote click/swipe behavior, including DPI/scaling.
-- Three-device soak testing, latency, thermal/battery use and reconnect behavior on Wi-Fi and Internet.
+- Android MediaProjection consent and screen-capture stability.
+- Accessibility-service enablement and tap/swipe behavior.
+- Windows remote click/swipe behavior across DPI and scaling settings.
+- Two- and three-device soak tests, latency, reconnect behavior, thermal/battery usage and different Wi-Fi/network conditions.
 
 ## Current feature boundaries and safety limits
 
-- Windows input bridge: remote click and swipe via Win32 `SendInput` only after the Windows user accepts the request. It cannot operate on the lock screen, secure desktop or UAC consent desktop.
-- Android: screen capture requires a fresh MediaProjection system consent. Remote tap/swipe requires the device owner to enable MTUNZ Accessibility and separately approve the incoming control request.
-- Room signaling: 64 active rooms maximum, 3 peers maximum per room, 15-minute room TTL, max 32 KB request bodies, 32 queued events per peer, one active long-poll per peer, 6 room creations and 12 join attempts per source IP per 5 minutes. These are development defaults, not a substitute for an externally reviewed anti-abuse design.
-- Internet relay: TURN/TLS is not bundled. Signaling HTTP is intended only for trusted LAN testing. Do not expose port 8787 directly to the public Internet.
-- Keyboard injection, file transfer, clipboard, audio, iOS, persistent trusted devices, user accounts and production-grade identity/revocation are not implemented.
+- Windows input bridge: approved mouse click/swipe via Win32 `SendInput`; it cannot operate the lock screen or UAC secure desktop.
+- Android: screen capture requires a fresh MediaProjection consent. Remote tap/swipe requires the device owner to enable MTUNZ Accessibility and approve control.
+- Signaling: maximum 3 peers per room, 15-minute room TTL, 90-second peer idle lease, maximum 64 active rooms, bounded event queues and rate limiting.
+- The signaling service is for trusted LAN testing. It uses HTTP in this development setup; do not expose port 8787 directly to the public Internet.
+- STUN is configured, but TURN relay/TLS is not bundled. Some NAT and mobile-network paths will fail to establish direct P2P media.
+- iOS, keyboard injection, file transfer, clipboard, audio, persistent device identities and production-grade account/revocation are not implemented.
 
 ## Build requirements
 
 - Flutter 3.47.9 stable (pinned in CI).
-- Android SDK / JDK 21 for APK builds.
-- Windows 10/11 build host with Visual Studio 2022 and Desktop development with C++ for local Windows builds.
-- GitHub Actions can rebuild the Android APK, Windows desktop release ZIP and signaling executable when application/platform/server source changes are pushed, or when the workflow is manually dispatched.
+- Android SDK and JDK 21 for APK builds.
+- Windows build host with Visual Studio 2022 and Desktop development with C++ for local Windows builds.
+- GitHub Actions rebuilds Android, Windows desktop and signaling server when relevant source files change, or when manually dispatched.
