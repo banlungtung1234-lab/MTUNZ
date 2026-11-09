@@ -3,5 +3,8 @@
 }
 
 {$MTUNZ_DOMAIN} {
-  reverse_proxy signaling:8787
+  reverse_proxy signaling:8787 {
+    # Overwrite, do not append, so Go receives one trusted client IP.
+    header_up X-Forwarded-For {http.request.remote.host}
+  }
 }

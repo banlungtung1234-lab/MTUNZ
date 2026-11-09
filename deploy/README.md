@@ -36,6 +36,8 @@ Edit `deploy/.env`:
 5. Keep the same secret for the signaling and coturn services. Never commit `deploy/.env` or post its contents publicly.
 6. Make sure `MTUNZ_TURN_URLS` matches the TURN hostname.
 
+The Go signaling server trusts forwarded client IP information only from the statically assigned Caddy proxy address 172.30.0.2/32; Caddy overwrites X-Forwarded-For with the actual TCP peer address. This keeps per-IP rate limits effective without trusting spoofed client headers. If you change the Compose subnet or Caddy IP, update MTUNZ_TRUSTED_PROXIES and the Caddy static address together.
+
 The signaling server issues coturn REST credentials using the timestamped username and HMAC-SHA1 construction required by coturn's TURN REST API. The shared secret remains server-side; clients receive only temporary credentials. The configured default lifetime is 900 seconds. See [coturn TURN REST API documentation](https://github.com/coturn/coturn/blob/master/README.turnserver).
 
 ## 3. Open firewall ports
@@ -82,6 +84,7 @@ When a device joins a room, the signaling API returns the temporary TURN credent
 - If rooms work but the peer connection never reaches connected, check `docker compose logs coturn`, the TURN DNS record, `TURN_EXTERNAL_IP`, the shared secret, and the full relay port range.
 - If the VPS is behind NAT, verify that the public-to-private address mapping is correct and that every relay port is forwarded.
 - Do not expose the coturn shared secret, temporary TURN credentials or `deploy/.env`.
+- Keep the 172.30.0.0/24 Compose subnet free from conflicts with existing Docker/VPN networks. If it conflicts, change the subnet, Caddy static IP and MTUNZ_TRUSTED_PROXIES CIDR together.
 - A successful container start is not proof of external NAT traversal. Test from two devices on different networks and inspect whether ICE selects a relay candidate.
 
 ## 6. Stop and upgrade

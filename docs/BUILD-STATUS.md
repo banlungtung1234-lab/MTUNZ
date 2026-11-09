@@ -65,7 +65,7 @@ CI proves static analysis, automated tests and native compilation. It does **not
 ## Self-hosted deployment template
 
 - `server/Dockerfile` builds a non-root Linux signaling container.
-- `deploy/compose.yaml` starts signaling, Caddy HTTPS and coturn; `deploy/.env.example` contains placeholders only.
+- `deploy/compose.yaml` starts signaling, Caddy HTTPS and coturn; `deploy/.env.example` contains placeholders only. Caddy uses a static internal IP and Go trusts forwarded client IPs only from that proxy.
 - The workflow validates Compose configuration and builds the signaling container. This does not deploy a VPS, provision real DNS/certificates or prove external NAT traversal.
 
 ## Recommended next milestones

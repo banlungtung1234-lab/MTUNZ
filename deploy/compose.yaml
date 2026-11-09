@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       MTUNZ_ADDR: ":8787"
+      MTUNZ_TRUSTED_PROXIES: "172.30.0.2/32"
       MTUNZ_TURN_URLS: "${MTUNZ_TURN_URLS:?Set MTUNZ_TURN_URLS in deploy/.env}"
       MTUNZ_TURN_SHARED_SECRET: "${MTUNZ_TURN_SHARED_SECRET:?Set MTUNZ_TURN_SHARED_SECRET in deploy/.env}"
       MTUNZ_TURN_CREDENTIAL_TTL_SECONDS: "${MTUNZ_TURN_CREDENTIAL_TTL_SECONDS:-900}"
@@ -47,7 +48,8 @@ services:
       signaling:
         condition: service_healthy
     networks:
-      - mtunz-backend
+      mtunz-backend:
+        ipv4_address: 172.30.0.2
 
   # Coturn uses host networking on Linux to avoid Docker NAT overhead for
   # the large WebRTC relay port range. See deploy/README.md before opening ports.
@@ -77,6 +79,9 @@ services:
 networks:
   mtunz-backend:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   caddy_data:

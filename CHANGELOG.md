@@ -2,6 +2,8 @@
 
 ## 0.3.1-dev — 2026-11-09
 
+- Trust forwarded client IP headers only from the explicitly configured Caddy reverse-proxy address; prevent proxy-wide rate limiting and reject spoofed/ambiguous forwarding headers.
+
 - Raise Android minimum SDK from API 23 to API 24 to align with the Flutter 3.47 supported deployment baseline, and compile the Windows native runner against the Windows 10+ API baseline.
 - Expand Windows CI builds to two Windows runner images and preserve both artifacts for release validation.
 - Add Windows IPv4 adapter discovery for Wi-Fi, Ethernet and common Android RNDIS/USB tether network interfaces.

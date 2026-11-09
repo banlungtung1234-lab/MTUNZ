@@ -179,10 +179,34 @@ func (s *Server) allowCreateAttempt(ip string) bool {
 
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	remoteIP := net.ParseIP(strings.TrimSpace(host))
+	if remoteIP == nil || !isTrustedProxy(remoteIP) {
+		// Never trust client-supplied forwarding headers unless the TCP peer
+		// is an explicitly configured reverse proxy.
 		return host
 	}
-	return r.RemoteAddr
+	forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if forwarded == "" || strings.Contains(forwarded, ",") {
+		return host
+	}
+	client := net.ParseIP(forwarded)
+	if client == nil {
+		return host
+	}
+	return client.String()
+}
+
+func isTrustedProxy(remoteIP net.IP) bool {
+	for _, raw := range strings.Split(os.Getenv("MTUNZ_TRUSTED_PROXIES"), ",") {
+		_, network, err := net.ParseCIDR(strings.TrimSpace(raw))
+		if err == nil && network.Contains(remoteIP) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {

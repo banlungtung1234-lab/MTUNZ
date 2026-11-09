@@ -556,3 +556,28 @@ func TestCleanupExpiresRoomAndReleasesAllPollers(t *testing.T) {
 		}
 	}
 }
+
+func TestClientIPTrustsForwardedAddressOnlyFromConfiguredProxy(t *testing.T) {
+	t.Setenv("MTUNZ_TRUSTED_PROXIES", "172.30.0.2/32")
+
+	direct := httptest.NewRequest(http.MethodPost, "/api/rooms", nil)
+	direct.RemoteAddr = "198.51.100.10:23456"
+	direct.Header.Set("X-Forwarded-For", "203.0.113.50")
+	if got := clientIP(direct); got != "198.51.100.10" {
+		t.Fatalf("untrusted forwarded header changed direct client IP: got %q", got)
+	}
+
+	proxied := httptest.NewRequest(http.MethodPost, "/api/rooms", nil)
+	proxied.RemoteAddr = "172.30.0.2:8080"
+	proxied.Header.Set("X-Forwarded-For", "203.0.113.50")
+	if got := clientIP(proxied); got != "203.0.113.50" {
+		t.Fatalf("trusted proxy client IP not recovered: got %q", got)
+	}
+
+	ambiguous := httptest.NewRequest(http.MethodPost, "/api/rooms", nil)
+	ambiguous.RemoteAddr = "172.30.0.2:8080"
+	ambiguous.Header.Set("X-Forwarded-For", "203.0.113.50, 198.51.100.20")
+	if got := clientIP(ambiguous); got != "172.30.0.2" {
+		t.Fatalf("ambiguous forwarded chain should not be trusted: got %q", got)
+	}
+}
