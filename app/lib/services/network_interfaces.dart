@@ -36,6 +36,19 @@ class NetworkInterfaceDiscovery {
     return NetworkLinkKind.other;
   }
 
+  static bool isThisDeviceAddress(
+    String host,
+    Iterable<NetworkEndpoint> endpoints,
+  ) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized == 'localhost' || normalized.endsWith('.localhost')) {
+      return true;
+    }
+    final parsed = InternetAddress.tryParse(normalized);
+    if (parsed != null && parsed.isLoopback) return true;
+    return endpoints.any((endpoint) => endpoint.address == normalized);
+  }
+
   static Future<List<NetworkEndpoint>> discover() async {
     final interfaces = await NetworkInterface.list(
       includeLoopback: false,
