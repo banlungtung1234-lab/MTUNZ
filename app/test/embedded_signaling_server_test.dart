@@ -39,7 +39,7 @@ void main() {
     final response = await request.close();
     final responseText = await response.transform(utf8.decoder).join();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException('HTTP ${response.statusCode}: ${responseText}');
+      throw HttpException('HTTP ${response.statusCode}: $responseText');
     }
     if (responseText.isEmpty) return <String, dynamic>{};
     final decoded = jsonDecode(responseText);
