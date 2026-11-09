@@ -34,7 +34,7 @@ class SignalingHttpException implements Exception {
   final String message;
 
   @override
-  String toString() => 'Máy chủ trả về ' + statusCode.toString() + ': ' + message;
+  String toString() => 'Máy chủ trả về $statusCode: $message';
 }
 
 class SignalingClient {
@@ -108,20 +108,19 @@ class SignalingClient {
       }
       return decoded;
     } on SocketException catch (error) {
-      final target = error.address == null
-          ? uri.host
-          : error.address!.address + ':' + (error.port ?? uri.port).toString();
+      final target = error.address?.address ?? uri.host;
+      final targetPort = error.port ?? uri.port;
+      final details = error.message;
       throw StateError(
-        'Không truy cập được Core tại ' + uri.toString() +
-            ' (đích TCP: ' + target + '). ' +
-            'Kiểm tra thiết bị tạo phòng đang mở MTUNZ, đúng địa chỉ IP/cổng, ' +
-            'hai thiết bị cùng mạng và Windows Firewall cho phép mạng Private. ' +
-            'Chi tiết: ' + error.message,
+        'Không truy cập được Core tại $uri (đích TCP: $target:$targetPort). '
+        'Kiểm tra thiết bị tạo phòng đang mở MTUNZ, đúng địa chỉ IP/cổng, '
+        'hai thiết bị cùng mạng và Windows Firewall cho phép mạng Private. '
+        'Chi tiết: $details',
       );
     } on TimeoutException {
       throw StateError(
-        'Hết thời gian kết nối tới ' + uri.toString() +
-            '. Kiểm tra Wi-Fi/Ethernet/USB tethering, địa chỉ IP và tường lửa của thiết bị tạo phòng.',
+        'Hết thời gian kết nối tới $uri. Kiểm tra Wi-Fi/Ethernet/USB tethering, '
+        'địa chỉ IP và tường lửa của thiết bị tạo phòng.',
       );
     } finally {
       client.close(force: true);
@@ -167,7 +166,7 @@ class SignalingClient {
         ? base.path.substring(0, base.path.length - 1)
         : base.path;
     return base.replace(
-      path: basePath + path,
+      path: '$basePath$path',
       queryParameters: query,
     );
   }
@@ -202,7 +201,7 @@ class SignalingClient {
 
     final response = await _request(
       'POST',
-      '/api/rooms/' + normalizedCode + '/join',
+      '/api/rooms/$normalizedCode/join',
       body: {
         'peerId': peerId,
         'name': deviceName,
@@ -292,7 +291,7 @@ class SignalingClient {
       try {
         await _request(
           'POST',
-          '/api/rooms/' + code + '/signal',
+          '/api/rooms/$code/signal',
           body: payload,
           token: token,
         );
@@ -315,7 +314,7 @@ class SignalingClient {
       try {
         await _request(
           'POST',
-          '/api/rooms/' + code + '/leave',
+          '/api/rooms/$code/leave',
           query: {'peerId': peerId},
           body: const {},
           token: token,
@@ -347,11 +346,11 @@ class SignalingClient {
           final code = roomCode!;
           final token = _peerToken!;
           final uri = _uri(
-            '/api/rooms/' + code + '/events',
+            '/api/rooms/$code/events',
             {'peerId': peerId},
           );
           final request = await _client.getUrl(uri);
-          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer ' + token);
+          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
           request.headers.set(HttpHeaders.acceptHeader, 'application/json');
           request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
 
@@ -386,8 +385,8 @@ class SignalingClient {
             break;
           } else if (response.statusCode >= 400 &&
               response.statusCode < 500 &&
-              response.statusCode != HttpStatus.requestTimeout &&
-              response.statusCode != HttpStatus.tooManyRequests) {
+              response.statusCode != 408 &&
+              response.statusCode != 429) {
             if (!_events.isClosed) {
               _events.add({
                 'type': 'session-error',
@@ -400,8 +399,7 @@ class SignalingClient {
             if (!_closed && !_events.isClosed && !warningEmitted) {
               _events.add({
                 'type': 'connection-warning',
-                'message': 'Máy chủ đang tạm thời không phản hồi (' +
-                    response.statusCode.toString() + ').',
+                'message': 'Máy chủ đang tạm thời không phản hồi (${response.statusCode}).',
               });
               warningEmitted = true;
             }
@@ -465,20 +463,19 @@ class SignalingClient {
           ? decoded
           : <String, dynamic>{};
     } on SocketException catch (error) {
-      final socketTarget = error.address == null
-          ? 'đích socket không xác định'
-          : error.address!.address + ':' + (error.port ?? 0).toString();
+      final socketTarget = error.address?.address ?? 'đích socket không xác định';
+      final socketPort = error.port ?? 0;
+      final details = error.message;
       throw StateError(
-        'Không kết nối được MTUNZ Signaling Core tại ' + uri.toString() + '. ' +
-            'Kết nối TCP bị từ chối tại ' + socketTarget + '. ' +
-            'Kiểm tra MTUNZ đang chạy trên máy chủ, đúng địa chỉ IP/cổng ' +
-            'và Windows Firewall cho phép mạng Private. ' +
-            'Chi tiết: ' + error.message,
+        'Không kết nối được MTUNZ Signaling Core tại $uri. '
+        'Kết nối TCP bị từ chối tại $socketTarget:$socketPort. '
+        'Kiểm tra MTUNZ đang chạy trên máy chủ, đúng địa chỉ IP/cổng '
+        'và Windows Firewall cho phép mạng Private. Chi tiết: $details',
       );
     } on TimeoutException {
       throw StateError(
-        'Hết thời gian chờ khi gửi yêu cầu tới ' + uri.toString() + '. ' +
-            'Hãy kiểm tra kết nối mạng, tải của thiết bị tạo phòng và tường lửa.',
+        'Hết thời gian chờ khi gửi yêu cầu tới $uri. '
+        'Hãy kiểm tra kết nối mạng, tải của thiết bị tạo phòng và tường lửa.',
       );
     }
   }
