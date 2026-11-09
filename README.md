@@ -1,6 +1,6 @@
 # MTUNZ — native cross-device control
 
-**Version:** 0.1.1-dev  
+**Version:** 0.1.2-dev  
 **Platforms in this milestone:** Windows desktop + Android  
 **Application type:** Flutter native desktop/mobile (compiled EXE package + APK), not a website.
 
@@ -21,7 +21,7 @@ MTUNZ/
 └── docs/                        # Setup, security and milestone notes
 ```
 
-## Current 0.1.1-dev implementation
+## Current 0.1.2-dev implementation
 
 - Native Flutter user interface for Windows and Android.
 - Temporary room creation with an 8-character room code and 6-digit invitation PIN.
@@ -30,6 +30,8 @@ MTUNZ/
 - Server abuse/resource limits: at most 64 active rooms, 3 devices per room, 32 queued events per device, one active long-poll per device, 6 room creations and 12 join attempts per source IP per 5 minutes.
 - Uniform cryptographically generated room codes/PINs and bounded in-memory rate-limit tables.
 - Client signaling retries temporary queue-full (`503`) responses and serializes inbound events to preserve peer join/leave ordering.
+- Signaling presence uses a 90-second peer lease refreshed by long-poll requests; abandoned peers are removed, waiting polls are released, and remaining peers receive a peer-left event.
+- Client signaling uses bounded exponential retry backoff, avoids repeating outage notices, and reports when signaling has recovered.
 - WebRTC peer connections with STUN discovery, offer/answer and ICE candidate exchange. Video sender reuse avoids creating a new transceiver on each screen-share restart; externally ended Android capture sessions trigger cleanup.
 - Screen capture via `getDisplayMedia` and remote video rendering.
 - Android AccessibilityService bridge for normalized tap/swipe actions. The Android user must enable the service and approve each remote-control request.

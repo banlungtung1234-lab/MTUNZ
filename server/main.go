@@ -24,6 +24,7 @@ const (
 	maxBody        = 32 << 10
 	maxQueue       = 32
 	maxRateEntries = 10000
+	peerIdleTTL    = 90 * time.Second
 )
 
 type Room struct {
@@ -39,6 +40,8 @@ type Peer struct {
 	Events    chan Message
 	PollSlots chan struct{}
 	Token     string
+	LastSeen  time.Time
+	Done      chan struct{}
 }
 
 type rateLimitEntry struct {
@@ -89,7 +92,7 @@ func main() {
 	s := newServer()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "mtunz-signaling", "version": "0.1.1-dev"})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "mtunz-signaling", "version": "0.1.2-dev"})
 	})
 	mux.HandleFunc("POST /api/rooms", s.createRoom)
 	mux.HandleFunc("POST /api/rooms/{code}/join", s.joinRoom)
@@ -109,7 +112,7 @@ func main() {
 		MaxHeaderBytes:    1 << 20,
 	}
 	go func() {
-		ticker := time.NewTicker(time.Minute)
+		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			s.mu.Lock()
@@ -271,6 +274,7 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	peer := &Peer{
 		ID: req.PeerID, Name: req.Name,
 		Events: make(chan Message, maxQueue), PollSlots: make(chan struct{}, 1), Token: peerToken,
+		LastSeen: time.Now(), Done: make(chan struct{}),
 	}
 	room.Peers[req.PeerID] = peer
 	for _, p := range room.Peers {
@@ -304,11 +308,20 @@ func (s *Server) pollEvents(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if peer != nil && subtle.ConstantTimeCompare([]byte(token), []byte(peer.Token)) != 1 {
 		peer = nil
+	} else if peer != nil {
+		// A successful long-poll is also a lightweight presence heartbeat.
+		peer.LastSeen = time.Now()
 	}
 	s.mu.Unlock()
 	if peer == nil {
 		http.Error(w, "peer not joined or room expired", http.StatusNotFound)
 		return
+	}
+	select {
+	case <-peer.Done:
+		http.Error(w, "peer session expired", http.StatusNotFound)
+		return
+	default:
 	}
 	select {
 	case peer.PollSlots <- struct{}{}:
@@ -324,6 +337,9 @@ func (s *Server) pollEvents(w http.ResponseWriter, r *http.Request) {
 	select {
 	case msg := <-peer.Events:
 		messages = append(messages, msg)
+	case <-peer.Done:
+		http.Error(w, "peer session expired", http.StatusNotFound)
+		return
 	case <-timer.C:
 		writeJSON(w, http.StatusOK, messages)
 		return
@@ -334,6 +350,9 @@ func (s *Server) pollEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case msg := <-peer.Events:
 			messages = append(messages, msg)
+		case <-peer.Done:
+			http.Error(w, "peer session expired", http.StatusNotFound)
+			return
 		default:
 			writeJSON(w, http.StatusOK, messages)
 			return
@@ -370,6 +389,7 @@ func (s *Server) sendSignal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "target peer not found", http.StatusNotFound)
 		return
 	}
+	room.Peers[msg.From].LastSeen = time.Now()
 	if !enqueue(target, msg) {
 		s.mu.Unlock()
 		http.Error(w, "target signaling queue is full; retry shortly", http.StatusServiceUnavailable)
@@ -383,27 +403,19 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	peerID := strings.TrimSpace(r.URL.Query().Get("peerId"))
 	code := strings.ToUpper(strings.TrimSpace(r.PathValue("code")))
 	s.mu.Lock()
+	s.cleanupLocked()
 	room := s.rooms[code]
 	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	if room != nil && (room.Peers[peerID] == nil || subtle.ConstantTimeCompare([]byte(room.Peers[peerID].Token), []byte(token)) != 1) {
-		room = nil
+	var peer *Peer
+	if room != nil {
+		peer = room.Peers[peerID]
 	}
-	if room == nil {
+	if peer == nil || subtle.ConstantTimeCompare([]byte(peer.Token), []byte(token)) != 1 {
 		s.mu.Unlock()
-		http.Error(w, "room not found", http.StatusNotFound)
+		http.Error(w, "room or peer not found", http.StatusNotFound)
 		return
 	}
-	delete(room.Peers, peerID)
-	for _, p := range room.Peers {
-		if !enqueue(p, Message{Type: "peer-left", PeerID: peerID}) {
-			// A leave notification is more useful than a stale queued candidate.
-			select {
-			case <-p.Events:
-			default:
-			}
-			_ = enqueue(p, Message{Type: "peer-left", PeerID: peerID})
-		}
-	}
+	s.removePeerLocked(room, peerID)
 	if len(room.Peers) == 0 {
 		delete(s.rooms, code)
 	}
@@ -411,10 +423,52 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// removePeerLocked closes the peer's presence channel and notifies the remaining
+// participants. The room mutex must be held by the caller.
+func (s *Server) removePeerLocked(room *Room, peerID string) {
+	peer := room.Peers[peerID]
+	if peer == nil {
+		return
+	}
+	delete(room.Peers, peerID)
+	if peer.Done != nil {
+		close(peer.Done)
+	}
+	for _, target := range room.Peers {
+		if !enqueue(target, Message{Type: "peer-left", PeerID: peerID}) {
+			// A leave notification is more useful than a stale queued candidate.
+			select {
+			case <-target.Events:
+			default:
+			}
+			_ = enqueue(target, Message{Type: "peer-left", PeerID: peerID})
+		}
+	}
+}
+
 func (s *Server) cleanupLocked() {
 	now := time.Now()
 	for code, room := range s.rooms {
 		if !now.Before(room.ExpiresAt) {
+			for _, peer := range room.Peers {
+				if peer.Done != nil {
+					close(peer.Done)
+				}
+			}
+			delete(s.rooms, code)
+			continue
+		}
+		// A new invitation room is intentionally empty until its first peer joins.
+		// Only remove an empty room here if cleanup evicted its last existing peer.
+		hadPeers := len(room.Peers) > 0
+		for peerID, peer := range room.Peers {
+			// A client that crashes or loses power stops long-polling. Expire its
+			// membership so the room does not remain occupied for the full TTL.
+			if !peer.LastSeen.IsZero() && now.Sub(peer.LastSeen) > peerIdleTTL {
+				s.removePeerLocked(room, peerID)
+			}
+		}
+		if hadPeers && len(room.Peers) == 0 {
 			delete(s.rooms, code)
 		}
 	}

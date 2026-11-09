@@ -1,4 +1,4 @@
-# MTUNZ architecture — 0.1.1-dev
+# MTUNZ architecture — 0.1.2-dev
 
 ## Control plane and media plane
 
@@ -13,6 +13,8 @@
 1. A client asks `POST /api/rooms` for an 8-character room code and 6-digit PIN.
 2. Each client joins with `POST /api/rooms/{code}/join` and receives an individual 256-bit peer token.
 3. Clients poll `GET /api/rooms/{code}/events?peerId=...` with their bearer token.
+4. Each successful poll refreshes the peer's 90-second presence lease. A background cleanup pass runs every 15 seconds; an idle peer is removed and its waiting poll is released.
+5. A removed peer triggers a `peer-left` event for the remaining participants.
 4. A peer posts SDP/ICE signaling to `POST /api/rooms/{code}/signal`; the server queues that message for the target peer.
 5. `POST /api/rooms/{code}/leave` removes the peer. Empty rooms are deleted. All rooms expire after 15 minutes.
 6. The room accepts no more than three participants and expires after 15 minutes. The server accepts at most 64 active rooms globally.

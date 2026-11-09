@@ -283,7 +283,17 @@ class RtcMesh {
       return;
     }
     if (type == 'connection-warning') {
-      onNotice('Mạng tín hiệu đang gián đoạn; đang thử kết nối lại.');
+      onNotice('Mạng tín hiệu đang gián đoạn; MTUNZ sẽ tự động thử kết nối lại.');
+      return;
+    }
+    if (type == 'connection-restored') {
+      onNotice('Kết nối tín hiệu đã được khôi phục.');
+      return;
+    }
+    if (type == 'session-error') {
+      final status = message['statusCode'];
+      final detail = message['message'] as String? ?? '';
+      onNotice('Phiên tín hiệu không còn hợp lệ (HTTP $status). Hãy ngắt phiên và kết nối lại. $detail');
       return;
     }
     if (type == 'peer-joined') {
