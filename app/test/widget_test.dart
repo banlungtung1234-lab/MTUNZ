@@ -1,10 +1,44 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mtunz/main.dart';
 
 void main() {
-  testWidgets('MTUNZ launches the native dashboard', (tester) async {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('MTUNZ launches the localized dashboard', (tester) async {
     await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
     expect(find.text('MTUNZ'), findsOneWidget);
     expect(find.text('Kết nối mọi thiết bị.'), findsOneWidget);
+  });
+
+  testWidgets('Language can be changed immediately and is remembered', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+
+    final languagePicker = find.byType(DropdownButtonFormField<String>);
+    expect(languagePicker, findsOneWidget);
+    await tester.tap(languagePicker);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('🇺🇸  English').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Connect every device.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Connect every device.'), findsOneWidget);
+    expect(find.text('Kết nối mọi thiết bị.'), findsNothing);
   });
 }
