@@ -59,5 +59,7 @@ void main() {
   test('sanitizes paths and unsafe file-name characters', () {
     expect(FileTransferProtocol.sanitizeFileName(r'C:\\private\\report?.pdf'), 'report_.pdf');
     expect(FileTransferProtocol.sanitizeFileName('../'), 'received-file');
+    expect(FileTransferProtocol.sanitizeFileName('CON.txt'), '_CON.txt');
+    expect(FileTransferProtocol.sanitizeFileName('LPT1'), '_LPT1');
   });
 }
