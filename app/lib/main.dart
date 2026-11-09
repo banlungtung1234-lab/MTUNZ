@@ -723,15 +723,8 @@ class _HomeShellState extends State<HomeShell> {
     return false;
   }
 
-  bool _isThisDeviceAddress(String host) {
-    final normalized = host.trim().toLowerCase();
-    if (normalized == 'localhost' || normalized.endsWith('.localhost')) {
-      return true;
-    }
-    final parsed = InternetAddress.tryParse(normalized);
-    if (parsed != null && parsed.isLoopback) return true;
-    return _networkEndpoints.any((endpoint) => endpoint.address == normalized);
-  }
+  bool _isThisDeviceAddress(String host) =>
+      NetworkInterfaceDiscovery.isThisDeviceAddress(host, _networkEndpoints);
 
   Future<void> _scanNetworkInterfaces() {
     // Room creation, startup and the Settings scan button can all request a
