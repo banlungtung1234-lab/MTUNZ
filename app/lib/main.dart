@@ -270,6 +270,13 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _joinRoom() async {
     if (!_ensureServerConfigured()) return;
+    final target = Uri.tryParse(_serverUrl);
+    if (target != null && _isThisDeviceAddress(target.host)) {
+      _showSnack(
+        'Địa chỉ này trỏ về chính thiết bị đang tham gia. Hãy nhập địa chỉ LAN trong lời mời của thiết bị tạo phòng, không dùng 127.0.0.1.',
+      );
+      return;
+    }
     final code = _codeController.text.trim().toUpperCase();
     final pin = _pinController.text.trim();
     if (code.length != 8 || pin.length != 6) {
@@ -714,6 +721,16 @@ class _HomeShellState extends State<HomeShell> {
     setState(() => _selectedIndex = 3);
     _showSnack(_t('server_required'));
     return false;
+  }
+
+  bool _isThisDeviceAddress(String host) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized == 'localhost' || normalized.endsWith('.localhost')) {
+      return true;
+    }
+    final parsed = InternetAddress.tryParse(normalized);
+    if (parsed != null && parsed.isLoopback) return true;
+    return _networkEndpoints.any((endpoint) => endpoint.address == normalized);
   }
 
   Future<void> _scanNetworkInterfaces() {
