@@ -407,3 +407,79 @@ func randomTestRoomCode(index int) string {
 	}
 	return string(code)
 }
+
+
+func TestCleanupRemovesIdlePeerAndNotifiesRemainingPeers(t *testing.T) {
+	now := time.Now()
+	server := newServer()
+	staleDone := make(chan struct{})
+	liveDone := make(chan struct{})
+	stale := &Peer{
+		ID: "peer-stale-123", Events: make(chan Message, maxQueue),
+		PollSlots: make(chan struct{}, 1), Token: "stale-token",
+		LastSeen: now.Add(-peerIdleTTL - time.Second), Done: staleDone,
+	}
+	live := &Peer{
+		ID: "peer-live-123", Events: make(chan Message, maxQueue),
+		PollSlots: make(chan struct{}, 1), Token: "live-token",
+		LastSeen: now, Done: liveDone,
+	}
+	room := &Room{
+		Code: "ABCDEFGH", JoinPin: "123456", ExpiresAt: now.Add(roomTTL),
+		Peers: map[string]*Peer{stale.ID: stale, live.ID: live},
+	}
+	server.rooms[room.Code] = room
+
+	server.mu.Lock()
+	server.cleanupLocked()
+	server.mu.Unlock()
+
+	if room.Peers[stale.ID] != nil {
+		t.Fatal("idle peer should be removed")
+	}
+	if room.Peers[live.ID] == nil {
+		t.Fatal("active peer should remain in the room")
+	}
+	select {
+	case <-staleDone:
+	default:
+		t.Fatal("removed peer's long-poll should be released")
+	}
+	select {
+	case event := <-live.Events:
+		if event.Type != "peer-left" || event.PeerID != stale.ID {
+			t.Fatalf("unexpected peer-left event: %#v", event)
+		}
+	default:
+		t.Fatal("remaining peer should receive a peer-left event")
+	}
+}
+
+func TestCleanupExpiresRoomAndReleasesAllPollers(t *testing.T) {
+	server := newServer()
+	doneA := make(chan struct{})
+	doneB := make(chan struct{})
+	room := &Room{
+		Code: "ABCDEFGH", JoinPin: "123456", ExpiresAt: time.Now().Add(-time.Second),
+		Peers: map[string]*Peer{
+			"peer-alpha-123": {ID: "peer-alpha-123", Done: doneA},
+			"peer-bravo-123": {ID: "peer-bravo-123", Done: doneB},
+		},
+	}
+	server.rooms[room.Code] = room
+
+	server.mu.Lock()
+	server.cleanupLocked()
+	server.mu.Unlock()
+
+	if server.rooms[room.Code] != nil {
+		t.Fatal("expired room should be removed")
+	}
+	for name, done := range map[string]<-chan struct{}{"alpha": doneA, "bravo": doneB} {
+		select {
+		case <-done:
+		default:
+			t.Fatalf("%s peer long-poll was not released", name)
+		}
+	}
+}
