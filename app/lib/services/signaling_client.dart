@@ -135,38 +135,87 @@ class SignalingClient {
     if (!_events.isClosed) await _events.close();
   }
 
+  int _pollFailures = 0;
+
+  Duration _nextPollingDelay() {
+    _pollFailures = (_pollFailures + 1).clamp(1, 4).toInt();
+    return Duration(milliseconds: 500 * (1 << (_pollFailures - 1)));
+  }
+
   Future<void> _startPolling() async {
     if (_polling || roomCode == null || _peerToken == null) return;
     _polling = true;
-    while (!_closed && roomCode != null && _peerToken != null) {
-      try {
-        final code = roomCode!;
-        final token = _peerToken!;
-        final uri = _uri('/api/rooms/$code/events', {'peerId': peerId});
-        final request = await _client.getUrl(uri);
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-        final response = await request.close().timeout(const Duration(seconds: 25));
-        final text = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200 && text.isNotEmpty) {
-          final decoded = jsonDecode(text);
-          if (decoded is List) {
-            for (final item in decoded) {
-              if (item is Map<String, dynamic> && !_events.isClosed) _events.add(item);
+    var warningEmitted = false;
+    try {
+      while (!_closed && roomCode != null && _peerToken != null) {
+        try {
+          final code = roomCode!;
+          final token = _peerToken!;
+          final uri = _uri('/api/rooms/$code/events', {'peerId': peerId});
+          final request = await _client.getUrl(uri);
+          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+          request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+          request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+          final response = await request.close().timeout(const Duration(seconds: 25));
+          final text = await response
+              .transform(utf8.decoder)
+              .join()
+              .timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200) {
+            final recovered = warningEmitted;
+            warningEmitted = false;
+            _pollFailures = 0;
+            if (recovered && !_events.isClosed) {
+              _events.add({'type': 'connection-restored'});
             }
+            if (text.isNotEmpty) {
+              final decoded = jsonDecode(text);
+              if (decoded is List) {
+                for (final item in decoded) {
+                  if (item is Map<String, dynamic> && !_events.isClosed) {
+                    _events.add(item);
+                  }
+                }
+              }
+            }
+          } else if (response.statusCode == 404) {
+            if (!_events.isClosed) _events.add({'type': 'room-expired'});
+            break;
+          } else if (response.statusCode >= 400 &&
+              response.statusCode < 500 &&
+              response.statusCode != 408 &&
+              response.statusCode != 429) {
+            if (!_events.isClosed) {
+              _events.add({
+                'type': 'session-error',
+                'statusCode': response.statusCode,
+                'message': text.trim(),
+              });
+            }
+            break;
+          } else {
+            if (!_closed && !_events.isClosed && !warningEmitted) {
+              _events.add({
+                'type': 'connection-warning',
+                'message': 'Máy chủ đang tạm thời không phản hồi (' + response.statusCode.toString() + ').',
+              });
+              warningEmitted = true;
+            }
+            await Future<void>.delayed(_nextPollingDelay());
           }
-        } else if (response.statusCode == 404) {
-          if (!_events.isClosed) _events.add({'type': 'room-expired'});
-          break;
-        } else {
-          await Future<void>.delayed(const Duration(milliseconds: 600));
+        } catch (error) {
+          if (_closed) break;
+          if (!_events.isClosed && !warningEmitted) {
+            _events.add({'type': 'connection-warning', 'message': '$error'});
+            warningEmitted = true;
+          }
+          await Future<void>.delayed(_nextPollingDelay());
         }
-      } catch (error) {
-        if (!_closed && !_events.isClosed) _events.add({'type': 'connection-warning', 'message': '$error'});
-        await Future<void>.delayed(const Duration(seconds: 1));
       }
+    } finally {
+      _polling = false;
     }
-    _polling = false;
   }
 
   Future<Map<String, dynamic>> _request(
