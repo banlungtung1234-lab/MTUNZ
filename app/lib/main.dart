@@ -4,6 +4,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'l10n/app_strings.dart';
 
 import 'services/platform_controller.dart';
 import 'services/rtc_mesh.dart';
@@ -14,8 +17,46 @@ void main() {
   runApp(const MtunzApp());
 }
 
-class MtunzApp extends StatelessWidget {
+class MtunzApp extends StatefulWidget {
   const MtunzApp({super.key});
+
+  @override
+  State<MtunzApp> createState() => _MtunzAppState();
+}
+
+class _MtunzAppState extends State<MtunzApp> {
+  static const _localePreferenceKey = 'mtunz.locale';
+  Locale _locale = const Locale('vi');
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreLocale();
+  }
+
+  Future<void> _restoreLocale() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final savedCode = preferences.getString(_localePreferenceKey);
+      if (savedCode != null && AppStrings.languages.containsKey(savedCode) && mounted) {
+        setState(() => _locale = Locale(savedCode));
+      }
+    } catch (_) {
+      // Keep Vietnamese as a safe default if preferences are unavailable.
+    }
+  }
+
+  Future<void> _setLocale(Locale locale) async {
+    final code = locale.languageCode;
+    if (!AppStrings.languages.containsKey(code)) return;
+    setState(() => _locale = locale);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_localePreferenceKey, code);
+    } catch (_) {
+      // The language still changes for this run if persistence is unavailable.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,13 +99,17 @@ class MtunzApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomeShell(),
+      locale: _locale,
+      home: HomeShell(locale: _locale, onLocaleChanged: _setLocale),
     );
   }
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({super.key, required this.locale, required this.onLocaleChanged});
+
+  final Locale locale;
+  final ValueChanged<Locale> onLocaleChanged;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -76,15 +121,23 @@ class _HomeShellState extends State<HomeShell> {
   final _pinController = TextEditingController();
   int _selectedIndex = 0;
   String _serverUrl = Platform.isAndroid ? '' : 'http://127.0.0.1:8787';
-  String _status = 'Chưa kết nối';
+  String _statusKey = 'status_not_connected';
+  int _connectedPeerCount = 0;
+  String get _statusText => _statusKey == 'status_connected_count'
+      ? _t('status_connected_count', {'count': '$_connectedPeerCount'})
+      : _t(_statusKey);
   String? _roomCode;
   String? _roomPin;
   bool _sharing = false;
   bool _busy = false;
-  String _notice = 'Sẵn sàng kết nối';
+  String _notice = 'notice_ready';
+  bool _noticeIsKey = true;
   SignalingClient? _signaling;
   RtcMesh? _mesh;
   List<PeerView> _peers = const [];
+
+  String _t(String key, [Map<String, String> values = const {}]) =>
+      AppStrings.text(widget.locale.languageCode, key, values);
 
   @override
   void dispose() {
@@ -113,8 +166,9 @@ class _HomeShellState extends State<HomeShell> {
         setState(() {
           _roomCode = invite.code;
           _roomPin = invite.pin;
-          _status = 'Đang chờ thiết bị';
-          _notice = 'Phòng kết nối đã sẵn sàng';
+          _statusKey = 'status_waiting';
+          _notice = 'notice_room_ready';
+          _noticeIsKey = true;
         });
         _showInvite(invite);
       } catch (_) {
@@ -129,7 +183,7 @@ class _HomeShellState extends State<HomeShell> {
     final code = _codeController.text.trim().toUpperCase();
     final pin = _pinController.text.trim();
     if (code.length != 8 || pin.length != 6) {
-      _showSnack('Mã phòng cần 8 ký tự và mã mời cần 6 chữ số.');
+      _showSnack(_t('join_format_error'));
       return;
     }
     await _withBusy(() async {
@@ -147,11 +201,12 @@ class _HomeShellState extends State<HomeShell> {
         setState(() {
           _roomCode = code;
           _roomPin = null;
-          _status = 'Đã vào phòng';
-          _notice = 'Đã kết nối máy chủ điều phối';
+          _statusKey = 'status_joined';
+          _notice = 'notice_signaling_connected';
+          _noticeIsKey = true;
           _selectedIndex = 2;
         });
-        _showSnack('Đã tham gia phòng $code.');
+        _showSnack(_t('join_success', {'code': code}));
       } catch (_) {
         if (!attached) await client.leave();
         rethrow;
@@ -172,7 +227,8 @@ class _HomeShellState extends State<HomeShell> {
         if (!mounted) return;
         setState(() {
           _peers = peers;
-          _status = peers.isEmpty ? 'Đang chờ thiết bị' : 'Đã kết nối ${peers.length} thiết bị';
+          _statusKey = peers.isEmpty ? 'status_waiting' : 'status_connected_count';
+          _connectedPeerCount = peers.length;
         });
       },
       onControlRequest: _handleControlRequest,
@@ -182,7 +238,10 @@ class _HomeShellState extends State<HomeShell> {
       },
       onNotice: (message) {
         if (!mounted) return;
-        setState(() => _notice = message);
+        setState(() {
+          _notice = message;
+          _noticeIsKey = false;
+        });
       },
     );
     unawaited(_mesh!.handleExistingPeers(existingPeers));
@@ -191,7 +250,7 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _handleControlRequest(String peerId, String peerName) async {
     if (!mounted) return;
     if (!Platform.isAndroid && !Platform.isWindows) {
-      _showSnack('Nền tảng này chưa hỗ trợ nhận thao tác điều khiển trong phiên bản hiện tại.');
+      _showSnack(_t('unsupported_platform'));
       return;
     }
     if (Platform.isAndroid) {
@@ -201,11 +260,11 @@ class _HomeShellState extends State<HomeShell> {
         final openSettings = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Cần bật quyền Trợ năng'),
-            content: const Text('Để nhận thao tác chạm từ xa, chủ thiết bị phải tự bật MTUNZ trong Cài đặt Trợ năng. MTUNZ không tự bật quyền này.'),
+            title: Text(_t('accessibility_required')),
+            content: Text(_t('accessibility_explain')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Để sau')),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Mở cài đặt')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_t('later'))),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('open_settings')),
             ],
           ),
         );
@@ -217,11 +276,11 @@ class _HomeShellState extends State<HomeShell> {
     final allow = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Yêu cầu điều khiển'),
-        content: Text('$peerName muốn thao tác trên thiết bị này. Bạn có muốn cho phép không?'),
+        title: Text(_t('control_request_title')),
+        content: Text(_t('control_request_body', {'name': peerName})),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Từ chối')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cho phép')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_t('deny'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('allow')),
         ],
       ),
     );
@@ -231,7 +290,7 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _startShare() async {
     await _withBusy(() async {
       final mesh = _mesh;
-      if (mesh == null) throw StateError('Hãy tạo hoặc tham gia phòng trước.');
+      if (mesh == null) throw StateError(_t('share_first'));
       await mesh.startScreenShare();
       if (mounted) setState(() => _sharing = true);
     });
@@ -268,11 +327,12 @@ class _HomeShellState extends State<HomeShell> {
         _roomCode = null;
         _roomPin = null;
         _sharing = false;
-        _status = 'Chưa kết nối';
+        _statusKey = 'status_not_connected';
+        _connectedPeerCount = 0;
       });
     }
     if (firstError != null) {
-      throw StateError('Đã ngắt tham chiếu phiên nhưng có lỗi khi giải phóng tài nguyên: $firstError');
+      throw StateError(_t('operation_failed', {'error': '$firstError'}));
     }
   }
 
@@ -282,7 +342,7 @@ class _HomeShellState extends State<HomeShell> {
     try {
       await action();
     } catch (error) {
-      _showSnack('Không thực hiện được: $error');
+      _showSnack(_t('operation_failed', {'error': '$error'}));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -292,21 +352,21 @@ class _HomeShellState extends State<HomeShell> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('MTUNZ đã tạo phòng'),
+        title: Text(_t('room_created')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Nhập hai mã này trên thiết bị còn lại. Chỉ chia sẻ với người bạn tin cậy.'),
+            Text(_t('invite_instructions')),
             const SizedBox(height: 18),
-            _CodeTile(label: 'MÃ PHÒNG', value: invite.code),
+            _CodeTile(label: _t('room_code'), value: invite.code),
             const SizedBox(height: 10),
-            _CodeTile(label: 'MÃ MỜI', value: invite.pin),
+            _CodeTile(label: _t('invite_pin'), value: invite.pin),
             const SizedBox(height: 10),
-            Text('Phòng tự hết hạn sau ${invite.expiresInSeconds ~/ 60} phút.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60)),
+            Text(_t('room_expires', {'minutes': '${invite.expiresInSeconds ~/ 60}'}), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60)),
           ],
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(_t('close')))],
       ),
     );
   }
@@ -322,21 +382,21 @@ class _HomeShellState extends State<HomeShell> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Tham gia thiết bị'),
+        title: Text(_t('join_device_title')),
         content: SizedBox(
           width: 380,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: _codeController, textCapitalization: TextCapitalization.characters, maxLength: 8, decoration: const InputDecoration(labelText: 'Mã phòng', hintText: 'ABCD2345')),
+              TextField(controller: _codeController, textCapitalization: TextCapitalization.characters, maxLength: 8, decoration: InputDecoration(labelText: _t('room_code'), hintText: _t('room_code_hint'))),
               const SizedBox(height: 10),
-              TextField(controller: _pinController, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Mã mời', hintText: '6 chữ số')),
+              TextField(controller: _pinController, keyboardType: TextInputType.number, maxLength: 6, decoration: InputDecoration(labelText: _t('invite_pin'), hintText: _t('pin_hint'))),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-          FilledButton(onPressed: () { Navigator.pop(context); unawaited(_joinRoom()); }, child: const Text('Kết nối')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(_t('cancel'))),
+          FilledButton(onPressed: () { Navigator.pop(context); unawaited(_joinRoom()); }, child: Text(_t('connect'))),
         ],
       ),
     );
@@ -349,7 +409,7 @@ class _HomeShellState extends State<HomeShell> {
       return true;
     }
     setState(() => _selectedIndex = 3);
-    _showSnack('Hãy nhập địa chỉ MTUNZ Signaling Server trong Cài đặt trước.');
+    _showSnack(_t('server_required'));
     return false;
   }
 
@@ -360,12 +420,12 @@ class _HomeShellState extends State<HomeShell> {
     final validPort = uri != null && (!uri.hasPort || (uri.port >= 1 && uri.port <= 65535));
     if (uri == null || !uri.hasScheme || !validScheme || uri.host.isEmpty ||
         uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment || !validPort) {
-      _showSnack('Địa chỉ không hợp lệ. Ví dụ: http://192.168.1.20:8787');
+      _showSnack(_t('server_invalid'));
       return;
     }
     final normalized = uri.replace(path: uri.path.replaceFirst(RegExp(r'/$'), '')).toString();
     setState(() => _serverUrl = normalized);
-    _showSnack('Đã lưu địa chỉ máy chủ cho phiên mới.');
+    _showSnack(_t('server_saved'));
   }
 
   @override
@@ -470,7 +530,7 @@ class _HomeShellState extends State<HomeShell> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: const Color(0xFF101F30), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF1D3B50))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Icon(Icons.circle, color: Color(0xFF36D6A0), size: 8), const SizedBox(width: 8), Text(_status, style: const TextStyle(fontSize: 11, color: Color(0xFFB7C7D8))) ]),
+          Row(children: [const Icon(Icons.circle, color: Color(0xFF36D6A0), size: 8), const SizedBox(width: 8), Text(_statusText, style: const TextStyle(fontSize: 11, color: Color(0xFFB7C7D8))) ]),
           const SizedBox(height: 9),
           const Text('MTUNZ Core', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
           Text(_serverUrl, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9, color: Color(0xFF70839B))),
@@ -490,7 +550,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _statusPill() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(color: const Color(0xFF10261F), border: Border.all(color: const Color(0xFF245240)), borderRadius: BorderRadius.circular(30)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.circle, color: Color(0xFF43D7A5), size: 7), const SizedBox(width: 8), Text(_status, style: const TextStyle(fontSize: 11, color: Color(0xFFBAE9D7))) ]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.circle, color: Color(0xFF43D7A5), size: 7), const SizedBox(width: 8), Text(_statusText, style: const TextStyle(fontSize: 11, color: Color(0xFFBAE9D7))) ]),
       );
 
   Widget _buildOverview() => LayoutBuilder(builder: (context, constraints) {
@@ -698,7 +758,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _actionRow(IconData icon, String title, String detail, String action, VoidCallback onTap) => Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: const Color(0xFF172C42), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: const Color(0xFF56DDF3), size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)), Text(detail, style: const TextStyle(fontSize: 10, color: Color(0xFF8395AD)))])), TextButton(onPressed: onTap, child: Text(action))]);
 
-  Widget _buildNoticeBar() => Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8), decoration: const BoxDecoration(color: Color(0xFF0D1727), border: Border(top: BorderSide(color: Color(0xFF1E2B40)))), child: Row(children: [const Icon(Icons.info_outline_rounded, color: Color(0xFF4DDCF2), size: 14), const SizedBox(width: 8), Expanded(child: Text(_notice, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF92A3B9), fontSize: 10))) ]));
+  Widget _buildNoticeBar() => Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8), decoration: const BoxDecoration(color: Color(0xFF0D1727), border: Border(top: BorderSide(color: Color(0xFF1E2B40)))), child: Row(children: [const Icon(Icons.info_outline_rounded, color: Color(0xFF4DDCF2), size: 14), const SizedBox(width: 8), Expanded(child: Text(_noticeIsKey ? _t(_notice) : _notice, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF92A3B9), fontSize: 10))) ]));
 
   Widget _buildBottomBar() => NavigationBar(
         selectedIndex: _selectedIndex,
