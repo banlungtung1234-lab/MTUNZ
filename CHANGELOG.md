@@ -10,6 +10,10 @@
 - Fix invitation lifetime cleanup so a newly-created empty room remains available until its 15-minute expiry.
 - Keep the optional Go signaling service and HTTPS/TURN deployment template for user-managed remote Internet use.
 - Preserve WebRTC streaming, remote-control consent and file-transfer functionality from the prior branch; physical-device acceptance remains outstanding.
+- Fix Create Room to always host on the local embedded Core after a device has previously joined a remote room, preventing new invitations from accidentally pointing back to another device.
+- Add a `/healthz` preflight before room creation/join, with actionable diagnostics for wrong URL, unreachable host, firewall blocks and timeouts.
+- Remove a hidden indeterminate network-scan spinner that caused Flutter widget tests to time out while Settings was retained inside an IndexedStack.
+- Add end-to-end SignalingClient tests for health probing, host/join, peer events, SDP signaling, leave and rejecting a wrong Core address.
 
 
 ## 0.3.1-dev — 2026-11-09
