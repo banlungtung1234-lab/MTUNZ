@@ -444,7 +444,7 @@ class RtcMesh {
       return;
     }
     final transfer = _incomingTransfers[chunk.transferId];
-    if (transfer == null || !transfer.accepted) return;
+    if (transfer == null || transfer.peerId != link.id || !transfer.accepted) return;
     if (chunk.index != transfer.nextChunkIndex ||
         transfer.transferred + chunk.payload.length > transfer.size) {
       _abortIncomingFile(link, transfer, 'Dữ liệu tệp không đúng thứ tự hoặc vượt kích thước.');
@@ -467,7 +467,7 @@ class RtcMesh {
 
   Future<void> _finishIncomingFile(_PeerLink link, String transferId) async {
     final transfer = _incomingTransfers[transferId];
-    if (transfer == null) return;
+    if (transfer == null || transfer.peerId != link.id) return;
     if (transfer.transferred != transfer.size) {
       _abortIncomingFile(link, transfer, 'Tệp nhận được chưa đầy đủ, vui lòng gửi lại.');
       return;
@@ -782,11 +782,13 @@ class RtcMesh {
         } else if (type == 'file-accept') {
           final id = payload['transferId'] as String?;
           final outgoing = id == null ? null : _outgoingTransfers[id];
-          if (outgoing != null && !outgoing.accepted.isCompleted) outgoing.accepted.complete(true);
+          if (outgoing != null && outgoing.peerId == link.id && !outgoing.accepted.isCompleted) {
+            outgoing.accepted.complete(true);
+          }
         } else if (type == 'file-reject') {
           final id = payload['transferId'] as String?;
           final outgoing = id == null ? null : _outgoingTransfers[id];
-          if (outgoing != null) {
+          if (outgoing != null && outgoing.peerId == link.id) {
             outgoing.rejected = true;
             if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
             _updateFileTransfer(id!, status: 'rejected');
@@ -795,19 +797,25 @@ class RtcMesh {
           final id = payload['transferId'] as String?;
           if (id != null) {
             final outgoing = _outgoingTransfers[id];
-            if (outgoing != null) {
+            if (outgoing != null && outgoing.peerId == link.id) {
               outgoing.cancelled = true;
               if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
             }
-            _incomingTransfers.remove(id);
-            _updateFileTransfer(id, status: 'cancelled');
+            final incoming = _incomingTransfers[id];
+            if (incoming != null && incoming.peerId == link.id) {
+              _incomingTransfers.remove(id);
+              _updateFileTransfer(id, status: 'cancelled');
+            }
           }
         } else if (type == 'file-complete') {
           final id = payload['transferId'] as String?;
           if (id != null) await _finishIncomingFile(link, id);
         } else if (type == 'file-saved') {
           final id = payload['transferId'] as String?;
-          if (id != null) _updateFileTransfer(id, status: payload['saved'] == true ? 'completed' : 'not_saved');
+          final outgoing = id == null ? null : _outgoingTransfers[id];
+          if (id != null && (outgoing == null ? _fileTransfers[id]?.peerId == link.id : outgoing.peerId == link.id)) {
+            _updateFileTransfer(id, status: payload['saved'] == true ? 'completed' : 'not_saved');
+          }
         } else if (type == 'screen-share-status') {
           link.remoteSharing = payload['sharing'] == true;
           if (!link.remoteSharing) link.renderer.srcObject = null;
