@@ -186,7 +186,7 @@ class AppStrings {
         ? language[index]
         : (index >= 0 ? _values['en']![index] : key);
     for (final entry in values.entries) {
-      result = result.replaceAll('{' + entry.key + '}', entry.value);
+      result = result.replaceAll('{${entry.key}}', entry.value);
     }
     return result;
   }
