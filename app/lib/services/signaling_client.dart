@@ -333,10 +333,16 @@ class SignalingClient {
           ? 'đích socket không xác định'
           : '${error.address!.address}:${error.port ?? 0}';
       throw StateError(
-        'Không kết nối được MTUNZ Signaling Server tại $uri. '
+        'Không kết nối được MTUNZ Signaling Core tại $uri. '
         'Kết nối TCP bị từ chối tại $socketTarget. '
-        'Hãy kiểm tra start-server.bat và xác nhận /healthz hoạt động. '
+        'Kiểm tra MTUNZ đang chạy trên máy chủ, đúng địa chỉ IP/cổng '
+        'và Windows Firewall cho phép mạng Private. '
         'Chi tiết: ${error.message}',
+      );
+    } on TimeoutException {
+      throw StateError(
+        'Hết thời gian chờ khi gửi yêu cầu tới $uri. '
+        'Hãy kiểm tra kết nối mạng, tải của thiết bị tạo phòng và tường lửa.',
       );
     }
   }
