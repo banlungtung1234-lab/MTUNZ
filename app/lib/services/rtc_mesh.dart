@@ -329,7 +329,7 @@ class RtcMesh {
             index: chunkIndex,
             payload: payload,
           );
-          await _sendFilePacket(channel, packet);
+          await _sendFilePacket(channel, packet, isCancelled: () => transfer.cancelled || _disposed);
           sentBytes += payload.length;
           chunkIndex++;
           _updateFileTransfer(id, transferred: sentBytes);
@@ -342,20 +342,22 @@ class RtcMesh {
       _updateFileTransfer(id, status: 'sent');
     } catch (error) {
       _sendData(link, {'type': 'file-cancel', 'transferId': id});
-      _updateFileTransfer(id, status: transfer.cancelled ? 'cancelled' : 'failed');
+      _updateFileTransfer(id, status: transfer.cancelled ? 'cancelled' : transfer.rejected ? 'rejected' : 'failed');
       rethrow;
     } finally {
       _outgoingTransfers.remove(id);
     }
   }
 
-  Future<void> _sendFilePacket(RTCDataChannel channel, Uint8List packet) async {
+  Future<void> _sendFilePacket(RTCDataChannel channel, Uint8List packet, {required bool Function() isCancelled}) async {
     while (await channel.getBufferedAmount() > 512 * 1024) {
+      if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
       if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
         throw StateError('Kết nối đã đóng trong khi truyền tệp.');
       }
       await Future<void>.delayed(const Duration(milliseconds: 12));
     }
+    if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
     if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
       throw StateError('Kết nối đã đóng trong khi truyền tệp.');
     }
@@ -450,7 +452,9 @@ class RtcMesh {
     transfer.builder.add(chunk.payload);
     transfer.transferred += chunk.payload.length;
     transfer.nextChunkIndex++;
-    _updateFileTransfer(transfer.id, transferred: transfer.transferred);
+    if (transfer.nextChunkIndex % 8 == 0 || transfer.transferred == transfer.size) {
+      _updateFileTransfer(transfer.id, transferred: transfer.transferred);
+    }
   }
 
   void _abortIncomingFile(_PeerLink link, _IncomingFileTransfer transfer, String reason) {
@@ -483,7 +487,13 @@ class RtcMesh {
   void _recordFileTransfer(FileTransferView view) {
     _fileTransfers[view.id] = view;
     while (_fileTransfers.length > 20) {
-      final removable = _fileTransfers.values.where((item) => !item.canCancel).firstOrNull;
+      FileTransferView? removable;
+      for (final item in _fileTransfers.values) {
+        if (!item.canCancel) {
+          removable = item;
+          break;
+        }
+      }
       if (removable == null) break;
       _fileTransfers.remove(removable.id);
     }
@@ -776,6 +786,7 @@ class RtcMesh {
           final id = payload['transferId'] as String?;
           final outgoing = id == null ? null : _outgoingTransfers[id];
           if (outgoing != null) {
+            outgoing.rejected = true;
             if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
             _updateFileTransfer(id!, status: 'rejected');
           }
@@ -910,6 +921,7 @@ class _OutgoingFileTransfer {
   final String peerId;
   final Completer<bool> accepted = Completer<bool>();
   bool cancelled = false;
+  bool rejected = false;
 }
 
 class _IncomingFileTransfer {
