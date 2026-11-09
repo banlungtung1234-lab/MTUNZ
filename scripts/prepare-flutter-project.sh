@@ -70,6 +70,7 @@ copy_tree "$ROOT/platform/windows/runner" "$ROOT/app/windows/runner"
 # Windows 10 API baseline also applies to Windows 11, which reports NT 10.0.
 "$PYTHON_BIN" - "$ROOT/app/windows/CMakeLists.txt" <<'PYWINDOWSAPI'
 from pathlib import Path
+import re
 import sys
 
 path = Path(sys.argv[1])
