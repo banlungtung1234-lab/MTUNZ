@@ -460,9 +460,9 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _buildSideRail() => Container(
         width: 232,
-        decoration: const BoxDecoration(
-          color: Color(0xFF0C1423),
-          border: Border(right: BorderSide(color: Color(0xFF1D2A40))),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF101C2F), Color(0xFF0A1220)]),
+          border: const Border(right: BorderSide(color: Color(0xFF1D2A40))),
         ),
         padding: const EdgeInsets.fromLTRB(16, 22, 12, 18),
         child: Column(
@@ -650,14 +650,14 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildSession() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('session_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), SizedBox(height: 7), Text(_t('session_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: Text(_t('disconnect')))]),
+          Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('session_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), const SizedBox(height: 7), Text(_t('session_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: Text(_t('disconnect')))]),
           const SizedBox(height: 20),
           if (_roomCode == null) _panel(title: _t('no_session'), subtitle: _t('create_or_join'), child: Wrap(spacing: 10, children: [FilledButton(onPressed: _createRoom, child: Text(_t('create_room'))), OutlinedButton(onPressed: _showJoinDialog, child: Text(_t('join_room')))])) else ...[
             _panel(title: _t('room_code_title'), subtitle: _roomPin == null ? _t('joined_room') : _t('share_codes'), child: Row(children: [Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))), const Spacer(), if (_roomPin != null) Text('PIN $_roomPin', style: const TextStyle(color: Color(0xFFC3B7FF), fontWeight: FontWeight.w800))])),
             const SizedBox(height: 16),
             Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _sharing ? _stopShare : _startShare, icon: Icon(_sharing ? Icons.stop_circle_outlined : Icons.screen_share_outlined), label: Text(_sharing ? _t('stop_sharing') : _t('share_this_device'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.person_add_alt_1_rounded), label: Text(_t('add_another_device')))]),
             const SizedBox(height: 16),
-            _panel(title: _t('remote_screens'), subtitle: _t('tap_after_approval'), child: _peers.isEmpty ? const Padding(padding: EdgeInsets.symmetric(vertical: 34), child: Center(child: Text('Đang chờ thiết bị khác tham gia…', style: TextStyle(color: Color(0xFF91A0B7))))) : Column(children: _peers.map(_remoteScreenCard).toList())),
+            _panel(title: _t('remote_screens'), subtitle: _t('tap_after_approval'), child: _peers.isEmpty ? Padding(padding: const EdgeInsets.symmetric(vertical: 34), child: Center(child: Text(_t('waiting_peer'), style: const TextStyle(color: Color(0xFF91A0B7))))) : Column(children: _peers.map(_remoteScreenCard).toList())),
           ],
         ]),
       );
@@ -684,10 +684,12 @@ class _HomeShellState extends State<HomeShell> {
     return (x: x, y: y);
   }
 
+  String _peerStateLabel(String state) => state.replaceFirst('RTCPeerConnectionState.', '');
+
   Widget _remoteScreenCard(PeerView peer) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Expanded(child: Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700))), Text(peer.state, style: const TextStyle(fontSize: 10, color: Color(0xFF90A1B8)))]),
+          Row(children: [Expanded(child: Text(peer.name, style: const TextStyle(fontWeight: FontWeight.w700))), Text(_peerStateLabel(peer.state), style: const TextStyle(fontSize: 10, color: Color(0xFF90A1B8)))]),
           const SizedBox(height: 9),
           Container(
             width: double.infinity,
@@ -695,7 +697,7 @@ class _HomeShellState extends State<HomeShell> {
             decoration: BoxDecoration(color: const Color(0xFF050A12), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF25374E))),
             clipBehavior: Clip.antiAlias,
             child: (!peer.isSharing || peer.renderer?.srcObject == null)
-                ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.screen_search_desktop_rounded, size: 36, color: Color(0xFF60738D)), SizedBox(height: 8), Text(_t('no_video'), style: const TextStyle(color: Color(0xFF8FA0B7), fontSize: 11))]))
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.screen_search_desktop_rounded, size: 36, color: Color(0xFF60738D)), const SizedBox(height: 8), Text(_t('no_video'), style: const TextStyle(color: Color(0xFF8FA0B7), fontSize: 11))]))
                 : LayoutBuilder(builder: (context, box) {
                     Offset? swipeStart;
                     final viewport = box.biggest;
@@ -735,18 +737,39 @@ class _HomeShellState extends State<HomeShell> {
           const SizedBox(height: 8),
           Text(_t('settings_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
           const SizedBox(height: 22),
-          _panel(title: _t('core_title'), subtitle: _t('core_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextField(controller: _serverController, decoration: const InputDecoration(labelText: _t('server_address'), hintText: 'http://192.168.1.10:8787')), const SizedBox(height: 10), FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))), const SizedBox(height: 8), Text(_t('server_help'), style: const TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5))])),
+          _panel(title: _t('language_title'), subtitle: _t('language_subtitle'), child: DropdownButtonFormField<String>(
+            value: widget.locale.languageCode,
+            decoration: InputDecoration(labelText: _t('language_label'), prefixIcon: const Icon(Icons.translate_rounded)),
+            dropdownColor: const Color(0xFF16243A),
+            isExpanded: true,
+            items: AppStrings.languages.entries.map((entry) => DropdownMenuItem<String>(
+              value: entry.key,
+              child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+            )).toList(),
+            onChanged: (code) {
+              if (code == null) return;
+              widget.onLocaleChanged(Locale(code));
+              _showSnack(AppStrings.text(code, 'language_saved'));
+            },
+          )),
+          const SizedBox(height: 16),
+          _panel(title: _t('core_title'), subtitle: _t('core_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextField(controller: _serverController, decoration: InputDecoration(labelText: _t('server_address'), hintText: 'http://192.168.1.10:8787')), const SizedBox(height: 10), FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))), const SizedBox(height: 8), Text(_t('server_help'), style: const TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5))])),
           const SizedBox(height: 16),
           _panel(title: _t('security_title'), subtitle: _t('security_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('accessibility_help'), style: const TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: Text(_t('open_accessibility')))])),
           const SizedBox(height: 16),
-          _panel(title: _t('version_title'), subtitle: _t('version_subtitle'), child: const Row(children: [Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), Spacer(), Text('0.1.2-dev  ·  Native development', style: TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
+          _panel(title: _t('version_title'), subtitle: _t('version_subtitle'), child: Row(children: [const Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), const Spacer(), Text(_t('development_build'), style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
         ]),
       );
 
   Widget _panel({required String title, required String subtitle, required Widget child}) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(color: const Color(0xFF111A2B), border: Border.all(color: const Color(0xFF223149)), borderRadius: BorderRadius.circular(17)),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF142137), Color(0xFF101827)]),
+          border: Border.all(color: const Color(0xFF293A55)),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .16), blurRadius: 22, offset: const Offset(0, 9))],
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: const TextStyle(fontSize: 10, letterSpacing: 1.4, color: Color(0xFF67DDEC), fontWeight: FontWeight.w800)),
           const SizedBox(height: 5),
@@ -765,11 +788,11 @@ class _HomeShellState extends State<HomeShell> {
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
         backgroundColor: const Color(0xFF0C1423),
         indicatorColor: const Color(0xFF18374A),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard), label: _t('nav_overview')),
-          NavigationDestination(icon: Icon(Icons.devices_outlined), selectedIcon: Icon(Icons.devices), label: _t('nav_devices')),
-          NavigationDestination(icon: Icon(Icons.cast_connected_outlined), selectedIcon: Icon(Icons.cast_connected), label: _t('nav_session')),
-          NavigationDestination(icon: Icon(Icons.tune_outlined), selectedIcon: Icon(Icons.tune), label: _t('nav_settings')),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard), label: _t('nav_overview')),
+          NavigationDestination(icon: const Icon(Icons.devices_outlined), selectedIcon: const Icon(Icons.devices), label: _t('nav_devices')),
+          NavigationDestination(icon: const Icon(Icons.cast_connected_outlined), selectedIcon: const Icon(Icons.cast_connected), label: _t('nav_session')),
+          NavigationDestination(icon: const Icon(Icons.tune_outlined), selectedIcon: const Icon(Icons.tune), label: _t('nav_settings')),
         ],
       );
 }
