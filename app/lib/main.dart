@@ -212,12 +212,23 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _createRoom() async {
-    if (!_embeddedCore.isRunning && _usesEmbeddedCore) {
+    // Creating a room always makes this device the host. If the user had
+    // joined another device's room earlier, do not accidentally create a new
+    // room on that remote Core using its stale URL.
+    if (!_embeddedCore.isRunning) {
       await _startEmbeddedCore();
-      if (!_embeddedCore.isRunning) {
-        _showSnack('Không thể khởi động MTUNZ Core: ${_coreError ?? 'không rõ nguyên nhân'}');
-        return;
-      }
+    }
+    if (!_embeddedCore.isRunning) {
+      _showSnack('Không thể khởi động MTUNZ Core: ${_coreError ?? 'không rõ nguyên nhân'}');
+      return;
+    }
+    final localUrl = _embeddedCore.localUri.toString();
+    if (mounted) {
+      setState(() {
+        _serverUrl = localUrl;
+        _serverController.text = localUrl;
+        _usesEmbeddedCore = true;
+      });
     }
     if (!_ensureServerConfigured()) return;
     await _withBusy(() async {
@@ -1252,10 +1263,12 @@ class _HomeShellState extends State<HomeShell> {
                   alignment: Alignment.centerRight,
                   child: OutlinedButton.icon(
                     onPressed: _networkScanBusy ? null : _scanNetworkInterfaces,
-                    icon: _networkScanBusy
-                        ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.radar_rounded, size: 17),
-                    label: Text(_t('network_scan')),
+                    // The Settings page is kept alive in an IndexedStack.
+                    // An indeterminate spinner here prevents the whole widget
+                    // tree from ever settling in automated tests and can keep
+                    // hidden pages animating in the background.
+                    icon: const Icon(Icons.radar_rounded, size: 17),
+                    label: Text(_networkScanBusy ? 'Đang quét…' : _t('network_scan')),
                   ),
                 ),
                 if (_networkEndpoints.isEmpty && !_networkScanBusy)
