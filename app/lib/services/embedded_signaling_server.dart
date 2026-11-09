@@ -91,7 +91,7 @@ class EmbeddedSignalingServer {
 
   Future<void> _handleRequest(HttpRequest request) async {
     request.response.headers
-      ..set(HttpHeaders.xContentTypeOptionsHeader, 'nosniff')
+      ..set('X-Content-Type-Options', 'nosniff')
       ..set(HttpHeaders.cacheControlHeader, 'no-store');
     try {
       final segments = request.uri.pathSegments;
@@ -138,15 +138,26 @@ class EmbeddedSignalingServer {
       }
       _writeText(request.response, HttpStatus.notFound, 'not found');
     } catch (error) {
-      if (!request.response.headersSent) {
-        if (error is _RequestTooLarge) {
-          _writeText(request.response, HttpStatus.requestEntityTooLarge, 'request body too large');
-        } else if (error is FormatException) {
-          _writeText(request.response, HttpStatus.badRequest, 'invalid request');
-        } else {
-          _writeText(request.response, HttpStatus.internalServerError, 'internal Core error');
-        }
-      } else {
+      final status = error is _RequestTooLarge
+          ? HttpStatus.requestEntityTooLarge
+          : error is FormatException
+              ? HttpStatus.badRequest
+              : HttpStatus.internalServerError;
+      final message = error is _RequestTooLarge
+          ? 'request body too large'
+          : error is FormatException
+              ? 'invalid request'
+              : 'internal Core error';
+      // A route may already have committed its response before an asynchronous
+      // socket error arrives. Try to send a bounded error response, then close
+      // quietly if the socket has already been closed by the peer.
+      try {
+        request.response
+          ..statusCode = status
+          ..headers.contentType = ContentType.text
+          ..write(message);
+        await request.response.close();
+      } catch (_) {
         try {
           await request.response.close();
         } catch (_) {}
