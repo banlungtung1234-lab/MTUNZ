@@ -149,6 +149,7 @@ class _HomeShellState extends State<HomeShell> {
   String? _selectedFilePeerId;
   bool _filePickerBusy = false;
   bool _networkScanBusy = false;
+  Future<void>? _networkScanTask;
   List<NetworkEndpoint> _networkEndpoints = const [];
 
   String _t(String key, [Map<String, String> values = const {}]) =>
@@ -161,12 +162,18 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _startEmbeddedCore() {
+    // Await the in-flight startup even after the socket has been bound: the
+    // startup task also discovers LAN addresses for the invitation UI.
+    final runningTask = _coreStartup;
+    if (runningTask != null) return runningTask;
     if (_embeddedCore.isRunning) return Future<void>.value();
-    // Every caller (startup, retry and an early Create Room click) awaits the
-    // same in-flight startup instead of racing a second bind attempt.
-    return _coreStartup ??= _startEmbeddedCoreInternal().whenComplete(() {
-      _coreStartup = null;
+
+    late final Future<void> startup;
+    startup = _startEmbeddedCoreInternal().whenComplete(() {
+      if (identical(_coreStartup, startup)) _coreStartup = null;
     });
+    _coreStartup = startup;
+    return startup;
   }
 
   Future<void> _startEmbeddedCoreInternal() async {
@@ -709,8 +716,22 @@ class _HomeShellState extends State<HomeShell> {
     return false;
   }
 
-  Future<void> _scanNetworkInterfaces() async {
-    if (_networkScanBusy) return;
+  Future<void> _scanNetworkInterfaces() {
+    // Room creation, startup and the Settings scan button can all request a
+    // scan at once. Share one Future so the invitation waits for its LAN URLs.
+    final activeScan = _networkScanTask;
+    if (activeScan != null) return activeScan;
+
+    late final Future<void> scan;
+    scan = _performNetworkScan().whenComplete(() {
+      if (identical(_networkScanTask, scan)) _networkScanTask = null;
+    });
+    _networkScanTask = scan;
+    return scan;
+  }
+
+  Future<void> _performNetworkScan() async {
+    if (!mounted) return;
     setState(() => _networkScanBusy = true);
     try {
       final endpoints = await NetworkInterfaceDiscovery.discover();
