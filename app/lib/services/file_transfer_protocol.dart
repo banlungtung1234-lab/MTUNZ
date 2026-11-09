@@ -75,7 +75,15 @@ class FileTransferProtocol {
         .replaceAll(RegExp(r'[ .]+$'), '')
         .trim();
     if (cleaned.isEmpty || cleaned == '.' || cleaned == '..') return 'received-file';
-    final runes = cleaned.runes.toList(growable: false);
-    return runes.length <= 180 ? cleaned : String.fromCharCodes(runes.take(180));
+    final reservedWindowsName = RegExp(
+      r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\..*)?
+  }
+}
+,
+      caseSensitive: false,
+    );
+    final safeName = reservedWindowsName.hasMatch(cleaned) ? '_$cleaned' : cleaned;
+    final runes = safeName.runes.toList(growable: false);
+    return runes.length <= 180 ? safeName : String.fromCharCodes(runes.take(180));
   }
 }
