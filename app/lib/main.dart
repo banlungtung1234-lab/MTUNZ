@@ -170,7 +170,7 @@ class _HomeShellState extends State<HomeShell> {
           await client.leave();
           return;
         }
-        _attach(client, joined.peers);
+        _attach(client, joined);
         attached = true;
         setState(() {
           _roomCode = invite.code;
@@ -205,7 +205,7 @@ class _HomeShellState extends State<HomeShell> {
           await client.leave();
           return;
         }
-        _attach(client, joined.peers);
+        _attach(client, joined);
         attached = true;
         setState(() {
           _roomCode = code;
@@ -228,10 +228,11 @@ class _HomeShellState extends State<HomeShell> {
         deviceName: Platform.isAndroid ? 'MTUNZ Android' : 'MTUNZ Windows',
       );
 
-  void _attach(SignalingClient client, List<Map<String, dynamic>> existingPeers) {
+  void _attach(SignalingClient client, JoinInfo joined) {
     _signaling = client;
     _mesh = RtcMesh(
       signaling: client,
+      iceServers: joined.iceServers,
       onChanged: (peers) {
         if (!mounted) return;
         setState(() {
@@ -262,7 +263,7 @@ class _HomeShellState extends State<HomeShell> {
         setState(() => _fileTransfers = transfers);
       },
     );
-    unawaited(_mesh!.handleExistingPeers(existingPeers));
+    unawaited(_mesh!.handleExistingPeers(joined.peers));
   }
 
   Future<void> _handleControlRequest(String peerId, String peerName) async {

@@ -47,7 +47,7 @@ The signaling server issues coturn REST credentials using the timestamped userna
 | 3478 | UDP and TCP | Coturn client connections |
 | 49160–49200 | UDP | Coturn relay allocation range |
 
-This template does not enable TURN-over-TLS on port 5349. The signaling endpoint is HTTPS; TURN transport uses UDP/TCP with time-limited credentials, while WebRTC peer media/data remains encrypted by the peer connection. Add a TURN TLS certificate and `turns:` endpoint separately when a network requires TLS-only relay.
+This template does not enable TURN-over-TLS on port 5349. The signaling endpoint is HTTPS; clients can contact coturn over UDP or TCP on port 3478, while the TURN relay allocation range in this template is UDP-only. WebRTC peer media/data remains encrypted by the peer connection. Add a TURN TLS certificate and `turns:` endpoint separately when a network requires TLS-only relay.
 
 ## 4. Validate and start
 

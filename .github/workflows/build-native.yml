@@ -199,6 +199,6 @@ jobs:
         run: |
           docker run --rm -e MTUNZ_DOMAIN=signal.example.com \\
             -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \\
-            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+            caddy:2.11.9-alpine validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Build signaling server container
         run: docker build --pull --file server/Dockerfile --tag mtunz-signaling:ci server

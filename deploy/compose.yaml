@@ -77,3 +77,7 @@ services:
 networks:
   mtunz-backend:
     driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
