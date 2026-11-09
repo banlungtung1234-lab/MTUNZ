@@ -1,4 +1,4 @@
-# MTUNZ 0.1.1-dev — cài đặt thử trong mạng Wi-Fi nội bộ
+# MTUNZ 0.1.2-dev — cài đặt thử trong mạng Wi-Fi nội bộ
 
 ## Bạn cần gì?
 
