@@ -738,6 +738,7 @@ class _HomeShellState extends State<HomeShell> {
           Text(_t('settings_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
           const SizedBox(height: 22),
           _panel(title: _t('language_title'), subtitle: _t('language_subtitle'), child: DropdownButtonFormField<String>(
+            key: ValueKey(widget.locale.languageCode),
             initialValue: widget.locale.languageCode,
             decoration: InputDecoration(labelText: _t('language_label'), prefixIcon: const Icon(Icons.translate_rounded)),
             dropdownColor: const Color(0xFF16243A),
