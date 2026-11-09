@@ -1,7 +1,7 @@
 name: mtunz
 description: MTUNZ cross-device remote connection and control app.
 publish_to: 'none'
-version: 0.2.0+4
+version: 0.3.0+5
 environment:
   sdk: '>=3.5.0 <4.0.0'
   flutter: '>=3.32.0'
@@ -10,6 +10,7 @@ dependencies:
     sdk: flutter
   flutter_webrtc: ^1.6.3
   shared_preferences: ^2.5.3
+  file_picker: ^13.3.2
   cupertino_icons: ^1.0.8
 dev_dependencies:
   flutter_test:
