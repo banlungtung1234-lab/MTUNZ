@@ -49,6 +49,13 @@ jobs:
           // path that has returned repeated HTTP 504 responses in CI.
           // The regional mirror is first; the normal repositories remain as fallback.
           gradle.beforeSettings { settings ->
+              // Adding a custom repository disables Gradle's implicit plugin portal.
+              // Keep the official plugin portal available for Flutter's Gradle plugins.
+              settings.pluginManagement.repositories.gradlePluginPortal()
+              settings.pluginManagement.repositories.google()
+              settings.pluginManagement.repositories.mavenCentral()
+              settings.dependencyResolutionManagement.repositories.google()
+              settings.dependencyResolutionManagement.repositories.mavenCentral()
               settings.pluginManagement.repositories.maven {
                   name = 'MavenCentralAsiaMirror'
                   url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
