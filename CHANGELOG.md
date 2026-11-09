@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-dev — 2026-11-10
+
+- Introduce MTUNZ Unified Core: embed the Dart signaling service inside the same Flutter application process on Windows and Android.
+- Automatically start/stop the Core with the application; remove the need to launch a separate signaling EXE or terminal for local-network pairing.
+- Prefer TCP 8787, safely fall back to an ephemeral free port, and display the actual host Core port plus LAN IPv4 endpoints in room invitations.
+- Allow the joining device to enter the host Core URL, room code and PIN in a single dialog.
+- Add authenticated room lifecycle, bounded HTTP bodies/event queues, rate limiting, constant-time PIN/token comparisons, three-peer room limits, stale-peer cleanup and end-to-end Core tests.
+- Fix invitation lifetime cleanup so a newly-created empty room remains available until its 15-minute expiry.
+- Keep the optional Go signaling service and HTTPS/TURN deployment template for user-managed remote Internet use.
+- Preserve WebRTC streaming, remote-control consent and file-transfer functionality from the prior branch; physical-device acceptance remains outstanding.
+
+
 ## 0.3.1-dev — 2026-11-09
 
 - Trust forwarded client IP headers only from the explicitly configured Caddy reverse-proxy address; prevent proxy-wide rate limiting and reject spoofed/ambiguous forwarding headers.
