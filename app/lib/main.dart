@@ -460,8 +460,8 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _buildSideRail() => Container(
         width: 232,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF101C2F), Color(0xFF0A1220)]),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF101C2F), Color(0xFF0A1220)]),
           border: const Border(right: BorderSide(color: Color(0xFF1D2A40))),
         ),
         padding: const EdgeInsets.fromLTRB(16, 22, 12, 18),
