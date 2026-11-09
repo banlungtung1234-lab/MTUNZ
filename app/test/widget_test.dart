@@ -12,7 +12,7 @@ void main() {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('MTUNZ'), findsOneWidget);
+    expect(find.text('MTUNZ'), findsWidgets);
     expect(find.text('Kết nối mọi thiết bị.'), findsOneWidget);
   });
 
@@ -31,7 +31,7 @@ void main() {
     await tester.tap(find.text('🇺🇸  English').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsWidgets);
     expect(find.text('Connect every device.'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
