@@ -4,8 +4,8 @@
 
 - **Source tree:** `cc2a0192e7280dbe79c16f590ebf9a67d632a8b5`
 - **Merged main commit:** `0b3e4661b58dc53d2847fa82757c23a942002350`
-- **Tested GitHub Actions run:** [Build MTUNZ native apps](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42565549426)
-- **Run result:** success; Android, Windows and Go server jobs completed successfully.
+- **Pull request validation:** [run 42565549426](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42565549426) — success.
+- **Post-merge main validation:** [run 42566057223](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42566057223) — success; Android, Windows and Go server jobs completed successfully.
 - **Flutter:** 3.47.9 stable
 - **Go:** 1.27.3
 
