@@ -1,10 +1,10 @@
-# MTUNZ — native cross-device control
+# MTUNZ — unified cross-device control
 
-**Version:** 0.3.1-dev  
+**Version:** 0.4.0-dev  
 **Platforms in this milestone:** Windows 10/11 x64 + Android (API 24+)  
 **Application type:** Flutter native desktop/mobile (compiled EXE package + APK), not a website.
 
-MTUNZ is being built as a real remote-support application. The app UI is native Flutter, media is carried peer-to-peer with WebRTC, and a small Go service exchanges only room/pairing and WebRTC signaling messages.
+MTUNZ is being built as a real remote-support application. The app UI and embedded signaling Core are native Flutter/Dart components. Media and file data travel peer-to-peer with WebRTC. A Go signaling service remains available as an optional self-hosted Internet deployment.
 
 ## Supported platform targets
 
@@ -21,20 +21,23 @@ MTUNZ/
 │   ├── test/                    # Flutter smoke tests
 │   └── pubspec.yaml
 ├── platform/android/            # Android manifest, Kotlin bridge, Accessibility service
-├── server/                      # Go signaling server (standard library only)
+├── app/lib/services/            # Embedded Dart Core + WebRTC + file-transfer engines
+├── server/                      # Optional Go signaling service for self-hosted remote deployments
 ├── scripts/                     # Native project preparation helpers
 ├── .github/workflows/           # Cloud builds for APK and Windows package
 └── docs/                        # Setup, security and milestone notes
 ```
 
-## Current 0.3.1-dev implementation
+## Current 0.4.0-dev implementation
 
 - Native Flutter user interface for Windows and Android.
 - Refreshed futuristic dashboard with responsive navigation, layered panels, clearer session cards and improved visual hierarchy.
 - Six selectable interface languages: Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish. The selected language applies immediately and is saved on the device.
 - Temporary room creation with an 8-character room code and 6-digit invitation PIN.
 - Per-device bearer token after joining; rooms allow at most 3 devices and expire after 15 minutes.
-- Go signaling server with authenticated long-poll message exchange, constant-time PIN/token checks, bounded request bodies, queue-overload responses, and cleanup.
+- Embedded signaling Core runs inside the same Flutter process on Windows and Android. It prefers TCP port 8787, falls back safely when that port is occupied, and is started/stopped with the app — no separate server executable or terminal is needed for LAN use.
+- Embedded Core-compatible HTTP API with authenticated long-poll events, room PIN and per-device bearer tokens, constant-time credential comparison, bounded request bodies/queues, rate limits, 3-device room limit, 15-minute room expiry and stale-peer cleanup.
+- Room invitations display the host device's LAN IPv4 addresses and active Core port. The joining device enters the host URL, room code and PIN in one dialog. The Core binds to IPv4 interfaces for Wi-Fi, Ethernet and Android USB tethering.
 - Server abuse/resource limits: at most 64 active rooms, 3 devices per room, 32 queued events per device, one active long-poll per device, 6 room creations and 12 join attempts per source IP per 5 minutes.
 - Uniform cryptographically generated room codes/PINs and bounded in-memory rate-limit tables.
 - Client signaling retries temporary queue-full (`503`) responses and serializes inbound events to preserve peer join/leave ordering.
@@ -76,7 +79,7 @@ These steps apply after the Android APK and Windows desktop package have been bu
 7. To control Android, the Android owner must enable MTUNZ Accessibility under Android Settings and approve the control request.
 8. To transfer a file, open **Files** in MTUNZ, choose the connected device and select a file. The receiving device must approve the incoming request and choose a save location. Each file is limited to 100 MB.
 
-Both devices must be able to reach the Windows signaling server over the same LAN or tethered IP network. Examples: Windows Ethernet + Android Wi-Fi on the same router, or Android USB tethering with Windows using the RNDIS adapter address. A USB cable alone is not a raw direct-USB transport. If the room connects but video/data does not, the network may block direct P2P; a deployed TURN relay is required for those restrictive paths.
+Both devices must be able to reach the room-hosting device's embedded Core over the same LAN or tethered IP network. Examples: Windows Ethernet + Android Wi-Fi on the same router, or Android USB tethering with Windows using the RNDIS adapter address. A USB cable alone is not a raw direct-USB transport. If the room connects but video/data does not, the network may block direct P2P; a deployed TURN relay is required for those restrictive paths. If port 8787 is already in use, the Core chooses another free port and displays it in the invitation.
 
 ## Remote Internet deployment (optional)
 
@@ -88,7 +91,7 @@ The workflow `.github/workflows/build-native.yml` builds:
 
 - `MTUNZ-Android-APK` — a release APK artifact.
 - `MTUNZ-Windows-x64-windows-2022` and `MTUNZ-Windows-x64-windows-latest` — Windows native release folder ZIPs built on two Windows runner images.
-- `MTUNZ-Signaling-Windows` — Windows signaling server executable. This is a background pairing/signaling service, not the MTUNZ desktop app itself.
+- `MTUNZ-Signaling-Windows` — optional Go signaling service for a separate self-hosted deployment. It is not needed for the normal embedded LAN workflow.
 
 The Windows ZIP contains the EXE and Flutter runtime DLLs; keep the complete folder together when installing/running it.
 
