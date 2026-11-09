@@ -129,6 +129,7 @@ class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
   String _serverUrl = '';
   bool _coreStarting = false;
+  Future<void>? _coreStartup;
   bool _usesEmbeddedCore = true;
   String? _coreError;
   String _statusKey = 'status_not_connected';
@@ -160,8 +161,17 @@ class _HomeShellState extends State<HomeShell> {
     unawaited(_startEmbeddedCore());
   }
 
-  Future<void> _startEmbeddedCore() async {
-    if (_coreStarting || _embeddedCore.isRunning) return;
+  Future<void> _startEmbeddedCore() {
+    if (_embeddedCore.isRunning) return Future<void>.value();
+    // Every caller (startup, retry and an early Create Room click) awaits the
+    // same in-flight startup instead of racing a second bind attempt.
+    return _coreStartup ??= _startEmbeddedCoreInternal().whenComplete(() {
+      _coreStartup = null;
+    });
+  }
+
+  Future<void> _startEmbeddedCoreInternal() async {
+    if (_embeddedCore.isRunning) return;
     if (mounted) setState(() => _coreStarting = true);
     try {
       // Port 8787 is preferred for predictable LAN sharing. If another app
@@ -185,6 +195,10 @@ class _HomeShellState extends State<HomeShell> {
         _coreError = '$error';
         _coreStarting = false;
       });
+    } finally {
+      if (mounted && _coreStarting) {
+        setState(() => _coreStarting = false);
+      }
     }
   }
 
