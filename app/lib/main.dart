@@ -638,6 +638,14 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _showJoinDialog() async {
     _codeController.clear();
     _pinController.clear();
+    // The joining device must enter the HOST's Core address, not its own
+    // loopback URL. Leave this blank for embedded-Core pairing so it is not
+    // mistaken for the remote host address.
+    if (_usesEmbeddedCore) {
+      _serverController.clear();
+    } else {
+      _serverController.text = _serverUrl;
+    }
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
