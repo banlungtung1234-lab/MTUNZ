@@ -25,7 +25,12 @@ void main() {
     Map<String, Object?>? body,
     String? token,
   }) async {
-    final request = await http.openUrl(method, core.localUri.replace(path: path));
+    final parsedPath = Uri.parse(path);
+    final requestUri = core.localUri.replace(
+      path: parsedPath.path,
+      query: parsedPath.hasQuery ? parsedPath.query : null,
+    );
+    final request = await http.openUrl(method, requestUri);
     request.headers.contentType = ContentType.json;
     if (token != null) {
       request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
