@@ -199,6 +199,13 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _createRoom() async {
+    if (!_embeddedCore.isRunning && _usesEmbeddedCore) {
+      await _startEmbeddedCore();
+      if (!_embeddedCore.isRunning) {
+        _showSnack('Không thể khởi động MTUNZ Core: ${_coreError ?? 'không rõ nguyên nhân'}');
+        return;
+      }
+    }
     if (!_ensureServerConfigured()) return;
     await _withBusy(() async {
       await _disconnect();
