@@ -10,11 +10,12 @@ import 'platform_controller.dart';
 import 'signaling_client.dart';
 
 class PeerView {
-  const PeerView({required this.id, required this.name, required this.state, required this.isSharing, this.renderer});
+  const PeerView({required this.id, required this.name, required this.state, required this.isSharing, required this.canSendFile, this.renderer});
   final String id;
   final String name;
   final String state;
   final bool isSharing;
+  final bool canSendFile;
   final RTCVideoRenderer? renderer;
 }
 
@@ -98,6 +99,7 @@ class RtcMesh {
             name: _peerNames[link.id] ?? 'Thiết bị ${link.id.substring(0, link.id.length < 4 ? link.id.length : 4)}',
             state: link.state,
             isSharing: link.remoteSharing,
+            canSendFile: link.dataChannel?.state == RTCDataChannelState.RTCDataChannelOpen,
             renderer: link.renderer,
           ))
       .toList(growable: false);
@@ -332,7 +334,9 @@ class RtcMesh {
           await _sendFilePacket(channel, packet, isCancelled: () => transfer.cancelled || _disposed);
           sentBytes += payload.length;
           chunkIndex++;
-          _updateFileTransfer(id, transferred: sentBytes);
+          if (chunkIndex % 8 == 0 || sentBytes == size) {
+            _updateFileTransfer(id, transferred: sentBytes);
+          }
         }
       }
       if (sentBytes != size) {
@@ -759,6 +763,9 @@ class RtcMesh {
 
   void _bindDataChannel(_PeerLink link, RTCDataChannel channel) {
     link.dataChannel = channel;
+    channel.onDataChannelState = (_) {
+      if (!_disposed && _links[link.id] == link) _notify();
+    };
     channel.onMessage = (message) async {
       if (message.isBinary) {
         _handleFileChunk(link, message.binary);
