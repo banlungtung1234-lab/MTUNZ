@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/app_strings.dart';
 
 import 'services/platform_controller.dart';
+import 'services/file_transfer_protocol.dart';
 import 'services/rtc_mesh.dart';
 import 'services/signaling_client.dart';
 
