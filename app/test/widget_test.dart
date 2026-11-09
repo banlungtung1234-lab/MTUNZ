@@ -38,11 +38,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('WI-FI / ETHERNET / USB'), findsOneWidget);
-    if (Platform.isWindows) {
-      expect(find.text('Quét adapter mạng'), findsOneWidget);
-    } else {
-      expect(find.textContaining('Trên Windows, quét adapter'), findsOneWidget);
-    }
+    expect(find.text('Quét adapter mạng'), findsOneWidget);
+    expect(find.textContaining('adapter RNDIS'), findsOneWidget);
   });
 
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
