@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1-dev — 2026-11-09
+
+- Raise Android minimum SDK from API 23 to API 24 to align with the Flutter 3.47 supported deployment baseline.
+- Compile the Windows native runner against the Windows 10+ API baseline for Windows 10 and Windows 11.
+- Expand Windows CI builds to two Windows runner images and preserve both artifacts for release validation.
+- Add bounded WebRTC ICE restart and re-negotiation attempts after interrupted peer connections, with deterministic offer ownership to reduce collisions.
+- Serialize incoming file receive/save operations globally to bound memory use on phones and reject over-size streaming sources before sending excess bytes.
+- Keep iOS/iPhone out of the current platform build and roadmap scope.
+
 ## 0.3.0-dev — 2026-11-09
 
 - Add peer-to-peer file sending and receiving over the existing WebRTC data channel; file contents are not uploaded to the signaling server.
