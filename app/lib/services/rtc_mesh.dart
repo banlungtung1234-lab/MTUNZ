@@ -650,7 +650,9 @@ class RtcMesh {
       return;
     }
     if (type != 'offer' && type != 'answer' &&
-        type != 'candidate' && type != 'candidate-batch') return;
+        type != 'candidate' && type != 'candidate-batch') {
+      return;
+    }
     final from = message['from'] as String?;
     final data = message['data'] as Map<String, dynamic>?;
     if (!_isValidPeerId(from) || data == null) return;
