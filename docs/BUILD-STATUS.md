@@ -1,25 +1,26 @@
-# MTUNZ 0.1.2-dev — build and validation status
+# MTUNZ 0.3.0-dev — build and validation status
 
 ## CI result: PASS
 
-- **Source tree:** `cc2a0192e7280dbe79c16f590ebf9a67d632a8b5`
-- **Merged main commit:** `0b3e4661b58dc53d2847fa82757c23a942002350`
-- **Pull request validation:** [run 42565549426](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42565549426) — success.
-- **Post-merge main validation:** [run 42566057223](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42566057223) — success; Android, Windows and Go server jobs completed successfully.
+- **Merged main commit:** `44dba08c68868ca723490ab28c7b1654f9ca7f9c`
+- **Feature PR:** [PR #3](https://github.com/banlungtung1234-lab/MTUNZ/pull/3) — merged on 2026-11-09.
+- **PR validation:** [run 42573294364](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42573294364) — success.
+- **Post-merge main validation:** [run 42574039126](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42574039126) — success; Android, Windows desktop and Windows signaling jobs completed successfully.
 - **Flutter:** 3.47.9 stable
 - **Go:** 1.27.3
+- **App version:** 0.3.0+5
 
-The tested PR commit and merged main commit have the same Git tree SHA, so the binaries below were built from exactly the source tree now on `main`.
+The successful post-merge workflow was run against the exact commit now at the tip of `main`.
 
 ## Build outputs
 
-| Artifact | Result | Inspection |
+| Artifact | CI | Binary/container inspection |
 |---|---|---|
-| Android APK | PASS | Valid APK archive; native ABIs arm64-v8a, armeabi-v7a and x86_64 |
-| Windows desktop | PASS | ZIP integrity; contains `MTUNZ.exe`, Flutter runtime, WebRTC DLL and app data |
-| Signaling server | PASS | PE32+ Windows x86-64 executable |
+| Android APK | PASS | Valid APK archive; contains arm64-v8a, armeabi-v7a and x86_64 native libraries |
+| Windows desktop | PASS | Valid ZIP; contains MTUNZ.exe, Flutter runtime, WebRTC DLL and app data |
+| Signaling server | PASS | Valid PE32+ Windows x86-64 executable |
 
-The individual Actions artifacts are retained for 30 days from the CI run. A combined installation pack was also assembled and checked separately; it includes the APK, Windows portable ZIP, signaling EXE, LAN startup BAT, Vietnamese installation guide and SHA-256 manifest.
+The downloadable GitHub Actions artifacts are retained for 30 days from the workflow run. A consolidated `MTUNZ-0.3.0-dev-Install-Pack.zip` can be assembled from these artifacts for first-time installation.
 
 ## CI checks
 
@@ -27,41 +28,39 @@ The individual Actions artifacts are retained for 30 days from the CI run. A com
 - Windows: `flutter analyze`, `flutter test`, `flutter build windows --release`, ZIP packaging — PASS.
 - Signaling server: `go test -race ./...`, `go vet ./...`, Windows x64 cross-compile — PASS.
 
-Regression coverage added for:
-- A new empty invitation room remains available until its TTL expires.
-- An idle peer is removed after its 90-second lease, the blocked long-poll is released, and remaining peers receive `peer-left`.
-- An expired room releases blocked peer pollers.
+The new file-transfer unit tests and localized Files-page widget test passed on both Android and Windows CI jobs.
 
-## Reliability changes in 0.1.2-dev
+## 0.3.0-dev file-transfer implementation
 
-- Each successful authenticated long-poll refreshes a peer's presence lease.
-- The server performs cleanup every 15 seconds and expires peers idle for more than 90 seconds.
-- Removing an idle peer releases its pending poll and notifies the other room members.
-- The client uses bounded exponential retry backoff (500 ms to 4 seconds), avoids repeated outage notices, and reports signaling recovery or terminal session errors.
-- Build and test checks now run on pull requests as well as source pushes to main.
+- Peer-to-peer file bytes travel over the existing WebRTC data channel, not through the signaling server.
+- The recipient must approve each incoming transfer and choose a save destination.
+- Data is framed in ordered 16 KB binary chunks with input validation, bounded data-channel buffering, transfer progress and cancellation.
+- Incoming file names are sanitized, including Windows-reserved names.
+- Per-file limit is 100 MB. The receiving device assembles the file in memory before opening the native save dialog.
+- File-transfer UI is translated into Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish.
 
 ## Still requires real-device validation
 
-CI confirms source analysis, tests and native compilation; it does **not** prove real-world remote control is stable on the user's devices. The following still need to be tested on a physical Windows PC and Android phone:
+CI proves static analysis, automated tests and native compilation; it does **not** prove reliable real-world Windows↔Android transfer. Test on a physical Windows PC and Android phone:
 
-- First installation and startup on the target devices.
-- Android MediaProjection consent and screen-capture stability.
-- Accessibility-service enablement and tap/swipe behavior.
-- Windows remote click/swipe behavior across DPI and scaling settings.
-- Two- and three-device soak tests, latency, reconnect behavior, thermal/battery usage and different Wi-Fi/network conditions.
+- Send small files in both directions and compare the saved file size/hash.
+- Verify receiver accept/reject, destination selection, save cancellation and sender cancellation.
+- Interrupt Wi-Fi during transfer and confirm both sides recover without a stuck transfer.
+- Exercise files approaching 100 MB while monitoring memory use.
+- Test same-Wi-Fi and restrictive NAT/mobile-network paths.
 
-## Current feature boundaries and safety limits
+## Current boundaries and safety limits
 
-- Windows input bridge: approved mouse click/swipe via Win32 `SendInput`; it cannot operate the lock screen or UAC secure desktop.
-- Android: screen capture requires a fresh MediaProjection consent. Remote tap/swipe requires the device owner to enable MTUNZ Accessibility and approve control.
-- Signaling: maximum 3 peers per room, 15-minute room TTL, 90-second peer idle lease, maximum 64 active rooms, bounded event queues and rate limiting.
-- The signaling service is for trusted LAN testing. It uses HTTP in this development setup; do not expose port 8787 directly to the public Internet.
-- STUN is configured, but TURN relay/TLS is not bundled. Some NAT and mobile-network paths will fail to establish direct P2P media.
-- iOS, keyboard injection, file transfer, clipboard, audio, persistent device identities and production-grade account/revocation are not implemented.
+- No TURN relay is bundled. Direct WebRTC may fail on restrictive NAT, carrier or office/school networks.
+- The signaling server uses HTTP for trusted-LAN development. Do not expose port 8787 directly to the public Internet; public deployment needs TLS and properly secured TURN.
+- Three devices maximum per room; multi-peer file transfer has not had physical-device soak testing.
+- The 100 MB file cap is a safeguard, not a promise of low memory use: the receiver buffers the complete file before saving.
+- Remote Android tap/swipe still requires the device owner to enable MTUNZ Accessibility and approve the request.
+- Keyboard injection, clipboard, audio, account login, persistent trusted devices and iOS are not implemented.
 
 ## Build requirements
 
 - Flutter 3.47.9 stable (pinned in CI).
 - Android SDK and JDK 21 for APK builds.
 - Windows build host with Visual Studio 2022 and Desktop development with C++ for local Windows builds.
-- GitHub Actions rebuilds Android, Windows desktop and signaling server when relevant source files change, or when manually dispatched.
+- GitHub Actions rebuilds Android, Windows and signaling server artifacts when relevant source files change, or when manually dispatched.
