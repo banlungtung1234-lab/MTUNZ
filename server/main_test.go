@@ -409,6 +409,23 @@ func randomTestRoomCode(index int) string {
 }
 
 
+func TestCleanupKeepsNewEmptyInvitationRoom(t *testing.T) {
+	server := newServer()
+	room := &Room{
+		Code: "ABCDEFGH", JoinPin: "123456", ExpiresAt: time.Now().Add(roomTTL),
+		Peers: make(map[string]*Peer),
+	}
+	server.rooms[room.Code] = room
+
+	server.mu.Lock()
+	server.cleanupLocked()
+	server.mu.Unlock()
+
+	if server.rooms[room.Code] != room {
+		t.Fatal("new empty invitation room must remain available until expiration")
+	}
+}
+
 func TestCleanupRemovesIdlePeerAndNotifiesRemainingPeers(t *testing.T) {
 	now := time.Now()
 	server := newServer()
