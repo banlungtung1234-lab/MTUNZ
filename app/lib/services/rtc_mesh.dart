@@ -39,8 +39,8 @@ class FileTransferView {
   final bool isOutgoing;
   final String status;
 
-  double get progress => size == 0 ? (status == 'completed' ? 1 : 0) : (transferred / size).clamp(0.0, 1.0);
-  bool get canCancel => const {'waiting', 'sending', 'receiving', 'saving'}.contains(status);
+  double get progress => size == 0 ? (status == 'completed' ? 1.0 : 0.0) : (transferred / size).clamp(0.0, 1.0);
+  bool get canCancel => const {'waiting', 'sending', 'receiving'}.contains(status);
 
   FileTransferView copyWith({int? transferred, String? status}) => FileTransferView(
         id: id,
@@ -386,9 +386,10 @@ class RtcMesh {
     final id = payload['transferId'] as String?;
     final rawName = payload['name'] as String?;
     final rawSize = payload['size'];
-    final size = rawSize is num ? rawSize.toInt() : -1;
+    final size = rawSize is int ? rawSize : -1;
     if (id == null || !FileTransferProtocol.isValidTransferId(id) ||
-        rawName == null || size < 0 || size > FileTransferProtocol.maxFileBytes) {
+        rawName == null || rawName.length > 1024 || size < 0 || size > FileTransferProtocol.maxFileBytes ||
+        _incomingTransfers.containsKey(id)) {
       _sendData(link, {'type': 'file-reject', 'transferId': id ?? ''});
       return;
     }
