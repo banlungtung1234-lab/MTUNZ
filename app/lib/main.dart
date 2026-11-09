@@ -232,6 +232,7 @@ class _HomeShellState extends State<HomeShell> {
     }
     if (!_ensureServerConfigured()) return;
     await _withBusy(() async {
+      await SignalingClient.checkHealth(_serverUrl);
       await _disconnect();
       final client = _newClient();
       var attached = false;
@@ -269,6 +270,7 @@ class _HomeShellState extends State<HomeShell> {
       return;
     }
     await _withBusy(() async {
+      await SignalingClient.checkHealth(_serverUrl);
       await _disconnect();
       final client = _newClient();
       var attached = false;
