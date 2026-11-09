@@ -19,11 +19,11 @@ void main() {
       signaling: signaling,
       iceServers: iceServers,
       onChanged: (_) {},
-      onControlRequest: (_, _) async {},
+      onControlRequest: (peerId, peerName) async {},
       onNotice: (_) {},
       onSharingChanged: (_) {},
-      onFileOffer: (_, _, _, _) async => false,
-      onFileReceived: (_, _, _) async => false,
+      onFileOffer: (peerId, peerName, fileName, size) async => false,
+      onFileReceived: (peerId, fileName, data) async => false,
       onFileTransfersChanged: (_) {},
     );
 
