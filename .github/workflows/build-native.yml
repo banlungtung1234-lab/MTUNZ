@@ -57,9 +57,7 @@ jobs:
                       includeGroupByRegex('org\\.jetbrains\\.kotlinx(\\..*)?')
                   }
               }
-          }
-          gradle.allprojects { project ->
-              project.repositories.maven {
+              settings.dependencyResolutionManagement.repositories.maven {
                   name = 'MavenCentralAsiaMirror'
                   url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
                   content {
