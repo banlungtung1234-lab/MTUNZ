@@ -655,7 +655,9 @@ class RtcMesh {
     }
     final from = message['from'] as String?;
     final data = message['data'] as Map<String, dynamic>?;
-    if (!_isValidPeerId(from) || data == null) return;
+    if (!_isValidPeerId(from) || data == null) {
+      return;
+    }
     final link = await _ensureLink(from!);
     if (type == 'offer') {
       final sdp = data['sdp'] as String?;
