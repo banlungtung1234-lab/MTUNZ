@@ -74,16 +74,12 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
-marker = "project(${BINARY_NAME} LANGUAGES CXX)"
+match = re.search(r"(?m)^\s*project\([^\r\n]+\)\s*$", source)
 definitions = "add_compile_definitions(WINVER=0x0A00 _WIN32_WINNT=0x0A00)"
-if marker not in source:
+if match is None:
     raise SystemExit("Could not find generated Windows CMake project declaration")
 if definitions not in source:
-    source = source.replace(
-        marker,
-        marker + "\n\n# Build against the Windows 10+ API baseline for Windows 10/11.\n" + definitions,
-        1,
-    )
+    source = source[:match.end()] + "\n\n# Build against the Windows 10+ API baseline for Windows 10/11.\n" + definitions + source[match.end():]
     path.write_text(source, encoding="utf-8")
 PYWINDOWSAPI
 
