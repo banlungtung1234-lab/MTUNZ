@@ -612,7 +612,7 @@ class _HomeShellState extends State<HomeShell> {
         title: _t('devices_in_room'),
         subtitle: _t('room_limit_subtitle'),
         child: _peers.isEmpty
-            ? const Padding(padding: EdgeInsets.symmetric(vertical: 15), child: Row(children: [Icon(Icons.devices_other_rounded, color: Color(0xFF62748D), size: 32), SizedBox(width: 13), Expanded(child: Text('Chưa có thiết bị nào tham gia. Tạo phòng hoặc nhập mã mời để bắt đầu.', style: TextStyle(color: Color(0xFF93A2B7), fontSize: 12, height: 1.45))) ]))
+            ? Padding(padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [const Icon(Icons.devices_other_rounded, color: Color(0xFF62748D), size: 32), const SizedBox(width: 13), Expanded(child: Text(_t('no_devices'), style: const TextStyle(color: Color(0xFF93A2B7), fontSize: 12, height: 1.45))) ]))
             : Column(children: _peers.map(_peerRow).toList()),
       );
 
