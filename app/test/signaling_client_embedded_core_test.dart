@@ -23,6 +23,12 @@ void main() {
     await core.close();
   });
 
+  test('Health probe validates the embedded Core before pairing', () async {
+    final health = await SignalingClient.checkHealth(core.localUri.toString());
+    expect(health['ok'], isTrue);
+    expect(health['service'], 'mtunz-embedded-core');
+  });
+
   test('SignalingClient can create, host, join and exchange peer signals', () async {
     final invite = await host.createRoom();
     expect(invite.code, matches(RegExp(r'^[A-HJ-NP-Z2-9]{8}$')));
