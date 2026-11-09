@@ -39,7 +39,38 @@ class SignalingClient {
   final String serverUrl;
   final String deviceName;
   final String peerId;
-  final HttpClient _client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+  final HttpClient _client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 8)
+    // Keep requests to localhost and private LAN addresses off local
+    // proxy/VPN listeners. A stale loopback proxy can otherwise make a
+    // request to 127.0.0.1:8787 fail against an unrelated ephemeral port.
+    ..findProxy = proxyFor;
+
+  /// Proxy policy for signaling traffic. Local MTUNZ servers must be reached
+  /// directly; public signaling hosts may use the user's configured proxy.
+  static String proxyFor(Uri uri) {
+    if (_isLocalNetworkHost(uri.host)) return 'DIRECT';
+    return HttpClient.findProxyFromEnvironment(uri);
+  }
+
+  static bool _isLocalNetworkHost(String host) {
+    final normalized = host.toLowerCase();
+    if (normalized == 'localhost' || normalized.endsWith('.localhost')) {
+      return true;
+    }
+    final address = InternetAddress.tryParse(normalized);
+    if (address == null) return false;
+    if (address.isLoopback || address.isLinkLocal) return true;
+    final bytes = address.rawAddress;
+    if (address.type == InternetAddressType.IPv4) {
+      return bytes[0] == 10 ||
+          (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+          (bytes[0] == 192 && bytes[1] == 168) ||
+          (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127);
+    }
+    // IPv6 unique-local addresses (fc00::/7) are private LAN addresses.
+    return bytes.isNotEmpty && (bytes[0] & 0xfe) == 0xfc;
+  }
   final StreamController<Map<String, dynamic>> _events = StreamController.broadcast();
   Stream<Map<String, dynamic>> get events => _events.stream;
 
@@ -266,19 +297,31 @@ class SignalingClient {
     String? token,
   }) async {
     final uri = _uri(path, query);
-    final request = await _client.openUrl(method, uri).timeout(const Duration(seconds: 10));
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
-    if (token != null) request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-    if (body != null) request.write(jsonEncode(body));
-    final response = await request.close().timeout(const Duration(seconds: 10));
-    final payload = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw SignalingHttpException(response.statusCode, payload.trim());
+    try {
+      final request = await _client.openUrl(method, uri).timeout(const Duration(seconds: 10));
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+      if (token != null) request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      if (body != null) request.write(jsonEncode(body));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final payload = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw SignalingHttpException(response.statusCode, payload.trim());
+      }
+      if (payload.isEmpty) return <String, dynamic>{};
+      final decoded = jsonDecode(payload);
+      return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    } on SocketException catch (error) {
+      final socketTarget = error.address == null
+          ? 'đích socket không xác định'
+          : '${error.address!.address}:${error.port ?? 0}';
+      throw StateError(
+        'Không kết nối được MTUNZ Signaling Server tại $uri. '
+        'Kết nối TCP bị từ chối tại $socketTarget. '
+        'Hãy kiểm tra start-server.bat và xác nhận /healthz hoạt động. '
+        'Chi tiết: ${error.message}',
+      );
     }
-    if (payload.isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(payload);
-    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
   }
 
   static String _randomId() {
