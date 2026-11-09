@@ -39,6 +39,23 @@ void main() {
     );
   });
 
+  test('rejects frames with invalid transfer id bytes or magic', () {
+    final invalidId = Uint8List(41);
+    invalidId.setRange(0, 4, [0x4D, 0x54, 0x46, 0x31]);
+    for (var index = 4; index < 36; index++) {
+      invalidId[index] = 0xFF;
+    }
+    expect(FileTransferProtocol.decodeChunk(invalidId), isNull);
+
+    final invalidMagic = FileTransferProtocol.encodeChunk(
+      transferId: '0123456789abcdef0123456789abcdef',
+      index: 0,
+      payload: Uint8List.fromList([7]),
+    );
+    invalidMagic[0] = 0;
+    expect(FileTransferProtocol.decodeChunk(invalidMagic), isNull);
+  });
+
   test('sanitizes paths and unsafe file-name characters', () {
     expect(FileTransferProtocol.sanitizeFileName(r'C:\\private\\report?.pdf'), 'report_.pdf');
     expect(FileTransferProtocol.sanitizeFileName('../'), 'received-file');
