@@ -677,7 +677,9 @@ class RtcMesh {
       final candidates = data['candidates'];
       if (candidates is List) {
         for (final item in candidates) {
-          if (item is Map<String, dynamic>) await _addRemoteCandidate(link, item);
+          if (item is Map<String, dynamic>) {
+            await _addRemoteCandidate(link, item);
+          }
         }
       }
     }
