@@ -76,7 +76,7 @@ class SignalingClient {
     final basePath = base.path.endsWith('/')
         ? base.path.substring(0, base.path.length - 1)
         : base.path;
-    final healthPath = basePath.isEmpty ? '/healthz' : basePath + '/healthz';
+    final healthPath = basePath.isEmpty ? '/healthz' : '$basePath/healthz';
     final uri = base.replace(
       path: healthPath,
       query: null,
@@ -441,7 +441,7 @@ class SignalingClient {
         'application/json; charset=utf-8',
       );
       if (token != null) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer ' + token);
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       }
       if (body != null) request.write(jsonEncode(body));
 
