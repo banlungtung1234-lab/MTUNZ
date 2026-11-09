@@ -198,7 +198,7 @@ class SignalingClient {
             if (!_closed && !_events.isClosed && !warningEmitted) {
               _events.add({
                 'type': 'connection-warning',
-                'message': 'Máy chủ đang tạm thời không phản hồi (' + response.statusCode.toString() + ').',
+                'message': 'Máy chủ đang tạm thời không phản hồi (${response.statusCode}).',
               });
               warningEmitted = true;
             }
