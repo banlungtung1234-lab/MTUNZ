@@ -1,45 +1,62 @@
-# MTUNZ 0.1.2-dev — cài đặt thử trong mạng Wi-Fi nội bộ
+# MTUNZ 0.3.0-dev — hướng dẫn cài Windows + Android
 
-## Bạn cần gì?
+## Gói cài đặt
 
-- Một PC Windows 11.
-- Một điện thoại Android (ví dụ Nubia Neo 2).
-- Mã nguồn từ repository MTUNZ. Tải artifact `MTUNZ-Signaling-Windows` từ GitHub Actions để lấy máy chủ; APK và ứng dụng Windows cũng được tạo riêng từ workflow.
-- Hai thiết bị cùng kết nối một mạng Wi-Fi.
+Gói thử nghiệm gồm ứng dụng Android APK, bộ ứng dụng Windows portable, MTUNZ Signaling Server và tệp khởi chạy máy chủ. Hai thiết bị nên kết nối cùng một mạng Wi-Fi trong lần thử đầu tiên.
 
-## A. Chạy máy chủ ghép nối trên Windows
+## 1. Giải nén gói
 
-1. Tải artifact `MTUNZ-Signaling-Windows` từ lần chạy GitHub Actions thành công gần nhất rồi giải nén.
-2. Đặt `MTUNZ-Signaling-Windows.exe` cùng thư mục với `start-server.bat`.
-3. Chạy `start-server.bat`; tệp BAT đặt cổng `8787` rồi khởi chạy máy chủ.
-4. Khi Windows Firewall hỏi, chỉ cho phép mạng **Private**.
-5. Giữ cửa sổ máy chủ mở trong khi đang kết nối.
-6. Mở Command Prompt, nhập `ipconfig`, tìm dòng IPv4 Address của card Wi-Fi (ví dụ `192.168.1.20`).
+Giải nén toàn bộ `MTUNZ-0.3.0-dev-Install-Pack.zip` vào một thư mục trên PC. Giữ nguyên cấu trúc thư mục bên trong.
 
-Máy chủ dùng cổng TCP `8787`. Không mở cổng này ra Internet trong bản thử nghiệm.
+## 2. Chạy máy chủ trên Windows
 
-## B. Cài ứng dụng (sau khi có artifact build)
+1. Mở thư mục `Server`.
+2. Nhấp đúp `start-server.bat`.
+3. Khi Windows Firewall hỏi, chỉ cho phép kết nối trên mạng **Private**.
+4. Giữ cửa sổ máy chủ mở trong khi hai thiết bị sử dụng MTUNZ.
+5. Mở Command Prompt, chạy `ipconfig`, tìm **IPv4 Address** của card Wi-Fi. Ví dụ: `192.168.1.20`.
 
-1. Trên Windows, giải nén toàn bộ `MTUNZ-Windows-x64.zip` vào một thư mục, ví dụ `C:\Apps\MTUNZ`.
-2. Chạy `MTUNZ.exe` trong thư mục `Release`. Không tách riêng file EXE khỏi các DLL và thư mục `data` đi kèm.
-3. Trên Android, mở `MTUNZ-Android.apk` đã build. Nếu Android chặn cài từ nguồn này, chỉ cấp quyền cài đặt cho ứng dụng quản lý tệp/trình duyệt mà bạn đang dùng và chỉ cài APK nhận từ nguồn MTUNZ của chính bạn.
+Máy chủ dùng cổng TCP `8787`. Đây là cấu hình thử nghiệm mạng nội bộ; không mở cổng này trực tiếp ra Internet.
 
-**Lưu ý:** chỉ cài APK và Windows desktop ZIP sau khi GitHub Actions báo build thành công. Máy chủ ghép nối là artifact riêng, không phải ứng dụng Windows Desktop.
+## 3. Cài ứng dụng
 
-## C. Ghép nối
+**Windows:** mở thư mục `Windows/MTUNZ` trong gói, sau đó chạy `MTUNZ.exe`. Không di chuyển riêng file EXE ra khỏi thư mục vì ứng dụng cần các DLL và thư mục `data` đi kèm.
 
-1. Vào **Cài đặt** trong MTUNZ trên cả hai thiết bị.
-2. Nhập cùng địa chỉ máy chủ, ví dụ `http://192.168.1.20:8787`. Trên Android, không nhập `127.0.0.1`: địa chỉ loopback trỏ về chính điện thoại. Windows chạy máy chủ trên cùng PC có thể dùng `http://127.0.0.1:8787`.
+**Android:** chép `Android/MTUNZ-Android-0.3.0-dev.apk` sang điện thoại và mở để cài đặt. Chỉ cấp quyền cài ứng dụng không rõ nguồn cho trình quản lý tệp/trình duyệt mà bạn đang dùng, sau đó có thể tắt quyền này lại.
+
+## 4. Ghép nối hai thiết bị
+
+1. Mở MTUNZ trên Windows và Android.
+2. Trên cả hai thiết bị, mở **Cài đặt** và nhập cùng địa chỉ máy chủ, ví dụ `http://192.168.1.20:8787`.
 3. Trên thiết bị thứ nhất, chọn **Tạo phòng kết nối**.
 4. Trên thiết bị thứ hai, chọn **Nhập mã phòng**, điền mã phòng 8 ký tự và PIN 6 chữ số.
-5. Trên thiết bị cần chia sẻ màn hình, chọn **Chia sẻ màn hình** và chấp thuận hộp thoại hệ thống Android nếu xuất hiện.
-6. Muốn điều khiển Android, người đang cầm điện thoại phải tự bật MTUNZ trong Cài đặt Trợ năng và chấp thuận yêu cầu điều khiển.
-7. Muốn điều khiển Windows, người dùng máy Windows phải chấp thuận yêu cầu trong MTUNZ. Bản phát triển hiện hỗ trợ chạm/nhấp và vuốt chuột; không điều khiển được màn hình khóa hoặc hộp thoại bảo mật UAC.
+5. Khi thấy trạng thái thiết bị đã kết nối, hai thiết bị có thể bắt đầu chia sẻ màn hình hoặc truyền tệp.
 
-## D. Ngắt kết nối an toàn
+Trên Android, không nhập `127.0.0.1`: địa chỉ đó trỏ về chính điện thoại. Windows chạy máy chủ trên cùng PC mới có thể dùng `http://127.0.0.1:8787`.
 
-Nhấn **Ngắt phiên** trong MTUNZ hoặc tắt chia sẻ màn hình. Có thể tắt MTUNZ Accessibility trong Android Settings bất cứ lúc nào. Đóng cửa sổ máy chủ khi không sử dụng.
+## 5. Truyền tệp
 
-## Lưu ý
+1. Mở mục **Tệp tin** trong MTUNZ.
+2. Chọn thiết bị nhận trong danh sách.
+3. Bấm **Chọn tệp và gửi**, rồi chọn một tệp trên thiết bị gửi.
+4. Trên thiết bị nhận, đọc tên và dung lượng tệp trong hộp thoại rồi chọn **Chấp nhận tệp** hoặc **Từ chối**.
+5. Nếu chấp nhận, chọn vị trí lưu trong hộp thoại hệ thống.
+6. Hai bên có thể xem tiến trình truyền và hủy khi đang truyền.
 
-Bản này dùng STUN để thử đường truyền trực tiếp. Nếu hai thiết bị khác mạng Wi-Fi, hoặc mạng chặn UDP/NAT traversal, video có thể không kết nối dù ghép nối đã thành công. Cần triển khai TURN qua TLS trước khi đưa ra Internet công cộng.
+Giới hạn hiện tại là **100 MB cho mỗi tệp**. Bên nhận đang ghép toàn bộ tệp trong bộ nhớ trước khi mở hộp thoại lưu; nên thử bằng tệp nhỏ trước và tránh gửi nhiều tệp lớn cùng lúc.
+
+## 6. Lưu ý khi kiểm thử
+
+- Gói này đã qua GitHub Actions: Flutter analyze, Flutter tests, Android APK build, Windows desktop build, Go race tests/vet và Windows signaling cross-build.
+- CI không thay thế kiểm thử thực tế. Cần thử gửi tệp nhỏ theo cả hai chiều Windows → Android và Android → Windows, thử từ chối, hủy, hủy chọn nơi lưu và ngắt Wi-Fi giữa chừng.
+- Kết nối WebRTC trực tiếp có thể không thành công trên một số mạng NAT/nhà mạng. Bản phát triển hiện chưa đóng gói TURN relay.
+- Signaling server hiện dùng HTTP cho thử nghiệm LAN. Không đưa máy chủ này trực tiếp lên Internet công cộng.
+- Khi xong, chọn **Ngắt phiên** và đóng cửa sổ signaling server.
+
+## Thành phần trong gói
+
+- `Android/MTUNZ-Android-0.3.0-dev.apk` — APK đa kiến trúc, gồm arm64-v8a, armeabi-v7a và x86_64.
+- `Windows/MTUNZ/` — ứng dụng Windows portable và các thư viện đi kèm.
+- `Server/MTUNZ-Signaling-Windows.exe` — máy chủ ghép nối Windows.
+- `Server/start-server.bat` — tệp chạy máy chủ trên cổng 8787.
+- `SHA256SUMS.txt` — mã SHA-256 để kiểm tra tệp.
