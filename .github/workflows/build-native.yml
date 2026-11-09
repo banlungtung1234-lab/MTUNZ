@@ -40,6 +40,37 @@ jobs:
         shell: bash
         run: ../scripts/prepare-flutter-project.sh
         working-directory: app
+      - name: Prefer an Asia-Pacific Maven Central mirror for Kotlin artifacts
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/mtunz-kotlin-maven-mirror.gradle" <<'GRADLEINIT'
+          // Keep Kotlin compiler/plugin artifacts off the GitHub Releases redirect
+          // path that has returned repeated HTTP 504 responses in CI.
+          // The regional mirror is first; the normal repositories remain as fallback.
+          gradle.beforeSettings { settings ->
+              settings.pluginManagement.repositories.maven {
+                  name = 'MavenCentralAsiaMirror'
+                  url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
+                  content {
+                      includeGroupByRegex('org\\.jetbrains\\.kotlin(\\..*)?')
+                      includeGroupByRegex('org\\.jetbrains\\.kotlinx(\\..*)?')
+                  }
+              }
+          }
+          gradle.allprojects { project ->
+              project.repositories.maven {
+                  name = 'MavenCentralAsiaMirror'
+                  url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
+                  content {
+                      includeGroupByRegex('org\\.jetbrains\\.kotlin(\\..*)?')
+                      includeGroupByRegex('org\\.jetbrains\\.kotlinx(\\..*)?')
+                  }
+              }
+          }
+          GRADLEINIT
+      - name: Cache Gradle distributions and dependencies
+        uses: gradle/actions/setup-gradle@v4
       - name: Analyze Dart code
         run: flutter analyze
         working-directory: app
