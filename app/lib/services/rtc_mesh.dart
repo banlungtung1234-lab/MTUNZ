@@ -1,18 +1,58 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import 'file_transfer_protocol.dart';
 import 'platform_controller.dart';
 import 'signaling_client.dart';
 
 class PeerView {
-  const PeerView({required this.id, required this.name, required this.state, required this.isSharing, this.renderer});
+  const PeerView({required this.id, required this.name, required this.state, required this.isSharing, required this.canSendFile, this.renderer});
   final String id;
   final String name;
   final String state;
   final bool isSharing;
+  final bool canSendFile;
   final RTCVideoRenderer? renderer;
+}
+
+class FileTransferView {
+  const FileTransferView({
+    required this.id,
+    required this.peerId,
+    required this.peerName,
+    required this.fileName,
+    required this.size,
+    required this.transferred,
+    required this.isOutgoing,
+    required this.status,
+  });
+
+  final String id;
+  final String peerId;
+  final String peerName;
+  final String fileName;
+  final int size;
+  final int transferred;
+  final bool isOutgoing;
+  final String status;
+
+  double get progress => size == 0 ? (status == 'completed' ? 1.0 : 0.0) : (transferred / size).clamp(0.0, 1.0);
+  bool get canCancel => const {'waiting', 'sending', 'receiving'}.contains(status);
+
+  FileTransferView copyWith({int? transferred, String? status}) => FileTransferView(
+        id: id,
+        peerId: peerId,
+        peerName: peerName,
+        fileName: fileName,
+        size: size,
+        transferred: transferred ?? this.transferred,
+        isOutgoing: isOutgoing,
+        status: status ?? this.status,
+      );
 }
 
 class RtcMesh {
@@ -22,6 +62,9 @@ class RtcMesh {
     required this.onControlRequest,
     required this.onNotice,
     required this.onSharingChanged,
+    required this.onFileOffer,
+    required this.onFileReceived,
+    required this.onFileTransfersChanged,
   }) {
     _subscription = signaling.events.listen(
       _queueSignalMessage,
@@ -36,7 +79,13 @@ class RtcMesh {
   final Future<void> Function(String peerId, String peerName) onControlRequest;
   final void Function(String message) onNotice;
   final void Function(bool sharing) onSharingChanged;
+  final Future<bool> Function(String peerId, String peerName, String fileName, int size) onFileOffer;
+  final Future<bool> Function(String peerName, String fileName, Uint8List bytes) onFileReceived;
+  final void Function(List<FileTransferView> transfers) onFileTransfersChanged;
   final Map<String, _PeerLink> _links = {};
+  final Map<String, _OutgoingFileTransfer> _outgoingTransfers = {};
+  final Map<String, _IncomingFileTransfer> _incomingTransfers = {};
+  final Map<String, FileTransferView> _fileTransfers = {};
   final Map<String, Future<_PeerLink>> _linkCreations = {};
   final Map<String, String> _peerNames = {};
   StreamSubscription<Map<String, dynamic>>? _subscription;
@@ -50,6 +99,7 @@ class RtcMesh {
             name: _peerNames[link.id] ?? 'Thiết bị ${link.id.substring(0, link.id.length < 4 ? link.id.length : 4)}',
             state: link.state,
             isSharing: link.remoteSharing,
+            canSendFile: link.dataChannel?.state == RTCDataChannelState.RTCDataChannelOpen,
             renderer: link.renderer,
           ))
       .toList(growable: false);
@@ -220,6 +270,255 @@ class RtcMesh {
     }
     channel.send(RTCDataChannelMessage(jsonEncode({'type': 'control-request'})));
     onNotice('Đã gửi yêu cầu điều khiển. Chờ thiết bị kia chấp thuận.');
+  }
+
+  Future<void> sendFile({
+    required String peerId,
+    required String fileName,
+    required int size,
+    required Stream<Uint8List> content,
+  }) async {
+    if (_disposed) throw StateError('Phiên MTUNZ đã đóng.');
+    if (size < 0 || size > FileTransferProtocol.maxFileBytes) {
+      throw StateError('Tệp vượt quá giới hạn 100 MB.');
+    }
+    final link = _links[peerId];
+    final channel = link?.dataChannel;
+    if (link == null || channel == null || channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+      throw StateError('Kênh truyền tệp chưa sẵn sàng.');
+    }
+    if (_outgoingTransfers.values.any((transfer) => transfer.peerId == peerId)) {
+      throw StateError('Đang có một tệp khác được gửi tới thiết bị này.');
+    }
+
+    final id = _newTransferId();
+    final safeName = FileTransferProtocol.sanitizeFileName(fileName);
+    final transfer = _OutgoingFileTransfer(id: id, peerId: peerId);
+    _outgoingTransfers[id] = transfer;
+    _recordFileTransfer(FileTransferView(
+      id: id,
+      peerId: peerId,
+      peerName: _peerNames[peerId] ?? 'MTUNZ device',
+      fileName: safeName,
+      size: size,
+      transferred: 0,
+      isOutgoing: true,
+      status: 'waiting',
+    ));
+
+    try {
+      await channel.send(RTCDataChannelMessage(jsonEncode({
+        'type': 'file-offer',
+        'transferId': id,
+        'name': safeName,
+        'size': size,
+      })));
+      final accepted = await transfer.accepted.future.timeout(const Duration(seconds: 90));
+      if (!accepted || transfer.cancelled) {
+        throw StateError('Thiết bị nhận đã từ chối hoặc hủy nhận tệp.');
+      }
+
+      _updateFileTransfer(id, status: 'sending');
+      var sentBytes = 0;
+      var chunkIndex = 0;
+      await for (final block in content) {
+        for (var offset = 0; offset < block.length; offset += FileTransferProtocol.chunkBytes) {
+          if (transfer.cancelled || _disposed) throw StateError('Truyền tệp đã bị hủy.');
+          final end = math.min(offset + FileTransferProtocol.chunkBytes, block.length);
+          final payload = Uint8List.sublistView(block, offset, end);
+          final packet = FileTransferProtocol.encodeChunk(
+            transferId: id,
+            index: chunkIndex,
+            payload: payload,
+          );
+          await _sendFilePacket(channel, packet, isCancelled: () => transfer.cancelled || _disposed);
+          sentBytes += payload.length;
+          chunkIndex++;
+          if (chunkIndex % 8 == 0 || sentBytes == size) {
+            _updateFileTransfer(id, transferred: sentBytes);
+          }
+        }
+      }
+      if (sentBytes != size) {
+        throw StateError('Kích thước tệp đọc được không khớp với thông tin ban đầu.');
+      }
+      await channel.send(RTCDataChannelMessage(jsonEncode({'type': 'file-complete', 'transferId': id})));
+      _updateFileTransfer(id, status: 'sent');
+    } catch (error) {
+      _sendData(link, {'type': 'file-cancel', 'transferId': id});
+      _updateFileTransfer(id, status: transfer.cancelled ? 'cancelled' : transfer.rejected ? 'rejected' : 'failed');
+      rethrow;
+    } finally {
+      _outgoingTransfers.remove(id);
+    }
+  }
+
+  Future<void> _sendFilePacket(RTCDataChannel channel, Uint8List packet, {required bool Function() isCancelled}) async {
+    while (await channel.getBufferedAmount() > 512 * 1024) {
+      if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
+      if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+        throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 12));
+    }
+    if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
+    if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+      throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+    }
+    await channel.send(RTCDataChannelMessage.fromBinary(packet));
+  }
+
+  void cancelFileTransfer(String transferId) {
+    final outgoing = _outgoingTransfers[transferId];
+    if (outgoing != null) {
+      outgoing.cancelled = true;
+      if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
+      final link = _links[outgoing.peerId];
+      if (link != null) _sendData(link, {'type': 'file-cancel', 'transferId': transferId});
+      _updateFileTransfer(transferId, status: 'cancelled');
+      return;
+    }
+    final incoming = _incomingTransfers.remove(transferId);
+    if (incoming != null) {
+      final link = _links[incoming.peerId];
+      if (link != null) _sendData(link, {'type': 'file-cancel', 'transferId': transferId});
+      _updateFileTransfer(transferId, status: 'cancelled');
+    }
+  }
+
+  Future<void> _handleFileOffer(_PeerLink link, Map<String, dynamic> payload) async {
+    final id = payload['transferId'] as String?;
+    final rawName = payload['name'] as String?;
+    final rawSize = payload['size'];
+    final size = rawSize is int ? rawSize : -1;
+    if (id == null || !FileTransferProtocol.isValidTransferId(id) ||
+        rawName == null || rawName.length > 1024 || size < 0 || size > FileTransferProtocol.maxFileBytes ||
+        _incomingTransfers.containsKey(id)) {
+      _sendData(link, {'type': 'file-reject', 'transferId': id ?? ''});
+      return;
+    }
+    if (_incomingTransfers.values.any((transfer) => transfer.peerId == link.id)) {
+      _sendData(link, {'type': 'file-reject', 'transferId': id});
+      return;
+    }
+
+    final safeName = FileTransferProtocol.sanitizeFileName(rawName);
+    final peerName = _peerNames[link.id] ?? 'MTUNZ device';
+    final incoming = _IncomingFileTransfer(
+      id: id,
+      peerId: link.id,
+      peerName: peerName,
+      fileName: safeName,
+      size: size,
+    );
+    _incomingTransfers[id] = incoming;
+    _recordFileTransfer(FileTransferView(
+      id: id,
+      peerId: link.id,
+      peerName: peerName,
+      fileName: safeName,
+      size: size,
+      transferred: 0,
+      isOutgoing: false,
+      status: 'waiting',
+    ));
+
+    var accepted = false;
+    try {
+      accepted = await onFileOffer(link.id, peerName, safeName, size);
+    } catch (error) {
+      if (!_disposed) onNotice('Không thể xác nhận yêu cầu nhận tệp: $error');
+    }
+    if (_disposed || !_incomingTransfers.containsKey(id)) return;
+    if (!accepted) {
+      _incomingTransfers.remove(id);
+      _updateFileTransfer(id, status: 'rejected');
+      _sendData(link, {'type': 'file-reject', 'transferId': id});
+      return;
+    }
+    incoming.accepted = true;
+    _updateFileTransfer(id, status: 'receiving');
+    _sendData(link, {'type': 'file-accept', 'transferId': id});
+  }
+
+  void _handleFileChunk(_PeerLink link, Uint8List bytes) {
+    final chunk = FileTransferProtocol.decodeChunk(bytes);
+    if (chunk == null) {
+      onNotice('Đã bỏ qua gói dữ liệu tệp không hợp lệ.');
+      return;
+    }
+    final transfer = _incomingTransfers[chunk.transferId];
+    if (transfer == null || transfer.peerId != link.id || !transfer.accepted) return;
+    if (chunk.index != transfer.nextChunkIndex ||
+        transfer.transferred + chunk.payload.length > transfer.size) {
+      _abortIncomingFile(link, transfer, 'Dữ liệu tệp không đúng thứ tự hoặc vượt kích thước.');
+      return;
+    }
+    transfer.builder.add(chunk.payload);
+    transfer.transferred += chunk.payload.length;
+    transfer.nextChunkIndex++;
+    if (transfer.nextChunkIndex % 8 == 0 || transfer.transferred == transfer.size) {
+      _updateFileTransfer(transfer.id, transferred: transfer.transferred);
+    }
+  }
+
+  void _abortIncomingFile(_PeerLink link, _IncomingFileTransfer transfer, String reason) {
+    _incomingTransfers.remove(transfer.id);
+    _updateFileTransfer(transfer.id, status: 'failed');
+    _sendData(link, {'type': 'file-cancel', 'transferId': transfer.id});
+    if (!_disposed) onNotice(reason);
+  }
+
+  Future<void> _finishIncomingFile(_PeerLink link, String transferId) async {
+    final transfer = _incomingTransfers[transferId];
+    if (transfer == null || transfer.peerId != link.id) return;
+    if (transfer.transferred != transfer.size) {
+      _abortIncomingFile(link, transfer, 'Tệp nhận được chưa đầy đủ, vui lòng gửi lại.');
+      return;
+    }
+    _incomingTransfers.remove(transferId);
+    _updateFileTransfer(transferId, status: 'saving');
+    final bytes = transfer.builder.takeBytes();
+    var saved = false;
+    try {
+      saved = await onFileReceived(transfer.peerName, transfer.fileName, bytes);
+    } catch (error) {
+      if (!_disposed) onNotice('Không lưu được tệp nhận: $error');
+    }
+    _sendData(link, {'type': 'file-saved', 'transferId': transferId, 'saved': saved});
+    _updateFileTransfer(transferId, status: saved ? 'completed' : 'not_saved');
+  }
+
+  void _recordFileTransfer(FileTransferView view) {
+    _fileTransfers[view.id] = view;
+    while (_fileTransfers.length > 20) {
+      FileTransferView? removable;
+      for (final item in _fileTransfers.values) {
+        if (!item.canCancel) {
+          removable = item;
+          break;
+        }
+      }
+      if (removable == null) break;
+      _fileTransfers.remove(removable.id);
+    }
+    _publishFileTransfers();
+  }
+
+  void _updateFileTransfer(String id, {int? transferred, String? status}) {
+    final current = _fileTransfers[id];
+    if (current == null) return;
+    _fileTransfers[id] = current.copyWith(transferred: transferred, status: status);
+    _publishFileTransfers();
+  }
+
+  void _publishFileTransfers() {
+    if (!_disposed) onFileTransfersChanged(_fileTransfers.values.toList(growable: false).reversed.toList(growable: false));
+  }
+
+  String _newTransferId() {
+    final random = math.Random.secure();
+    return List.generate(32, (_) => random.nextInt(16).toRadixString(16)).join();
   }
 
   Future<void> setRemoteControlPermission(String peerId, bool allowed) async {
@@ -464,8 +763,14 @@ class RtcMesh {
 
   void _bindDataChannel(_PeerLink link, RTCDataChannel channel) {
     link.dataChannel = channel;
+    channel.onDataChannelState = (_) {
+      if (!_disposed && _links[link.id] == link) _notify();
+    };
     channel.onMessage = (message) async {
-      if (message.isBinary) return;
+      if (message.isBinary) {
+        _handleFileChunk(link, message.binary);
+        return;
+      }
       try {
         final payload = jsonDecode(message.text) as Map<String, dynamic>;
         final type = payload['type'] as String?;
@@ -479,6 +784,45 @@ class RtcMesh {
           link.remoteGrantedControl = false;
           _notify();
           onNotice('Quyền điều khiển đã bị thu hồi.');
+        } else if (type == 'file-offer') {
+          await _handleFileOffer(link, payload);
+        } else if (type == 'file-accept') {
+          final id = payload['transferId'] as String?;
+          final outgoing = id == null ? null : _outgoingTransfers[id];
+          if (outgoing != null && outgoing.peerId == link.id && !outgoing.accepted.isCompleted) {
+            outgoing.accepted.complete(true);
+          }
+        } else if (type == 'file-reject') {
+          final id = payload['transferId'] as String?;
+          final outgoing = id == null ? null : _outgoingTransfers[id];
+          if (outgoing != null && outgoing.peerId == link.id) {
+            outgoing.rejected = true;
+            if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
+            _updateFileTransfer(id!, status: 'rejected');
+          }
+        } else if (type == 'file-cancel') {
+          final id = payload['transferId'] as String?;
+          if (id != null) {
+            final outgoing = _outgoingTransfers[id];
+            if (outgoing != null && outgoing.peerId == link.id) {
+              outgoing.cancelled = true;
+              if (!outgoing.accepted.isCompleted) outgoing.accepted.complete(false);
+            }
+            final incoming = _incomingTransfers[id];
+            if (incoming != null && incoming.peerId == link.id) {
+              _incomingTransfers.remove(id);
+              _updateFileTransfer(id, status: 'cancelled');
+            }
+          }
+        } else if (type == 'file-complete') {
+          final id = payload['transferId'] as String?;
+          if (id != null) await _finishIncomingFile(link, id);
+        } else if (type == 'file-saved') {
+          final id = payload['transferId'] as String?;
+          final outgoing = id == null ? null : _outgoingTransfers[id];
+          if (id != null && (outgoing == null ? _fileTransfers[id]?.peerId == link.id : outgoing.peerId == link.id)) {
+            _updateFileTransfer(id, status: payload['saved'] == true ? 'completed' : 'not_saved');
+          }
         } else if (type == 'screen-share-status') {
           link.remoteSharing = payload['sharing'] == true;
           if (!link.remoteSharing) link.renderer.srcObject = null;
@@ -512,11 +856,9 @@ class RtcMesh {
   void _sendData(_PeerLink link, Map<String, dynamic> data) {
     final channel = link.dataChannel;
     if (channel == null || channel.state != RTCDataChannelState.RTCDataChannelOpen) return;
-    try {
-      channel.send(RTCDataChannelMessage(jsonEncode(data)));
-    } catch (error) {
+    channel.send(RTCDataChannelMessage(jsonEncode(data))).catchError((Object error) {
       if (!_disposed) onNotice('Không gửi được thao tác tới thiết bị: $error');
-    }
+    });
   }
 
   Future<void> _removeLink(String peerId) async {
@@ -527,6 +869,16 @@ class RtcMesh {
       } catch (_) {
         // A peer can disappear while its connection is being initialized.
       }
+    }
+    for (final transfer in _outgoingTransfers.values.where((item) => item.peerId == peerId).toList()) {
+      transfer.cancelled = true;
+      if (!transfer.accepted.isCompleted) transfer.accepted.complete(false);
+      _outgoingTransfers.remove(transfer.id);
+      _updateFileTransfer(transfer.id, status: 'cancelled');
+    }
+    for (final transfer in _incomingTransfers.values.where((item) => item.peerId == peerId).toList()) {
+      _incomingTransfers.remove(transfer.id);
+      _updateFileTransfer(transfer.id, status: 'cancelled');
     }
     final link = _links.remove(peerId);
     _peerNames.remove(peerId);
@@ -549,6 +901,12 @@ class RtcMesh {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    for (final transfer in _outgoingTransfers.values) {
+      transfer.cancelled = true;
+      if (!transfer.accepted.isCompleted) transfer.accepted.complete(false);
+    }
+    _outgoingTransfers.clear();
+    _incomingTransfers.clear();
     await _subscription?.cancel();
     final pending = _linkCreations.values.toList(growable: false);
     for (final creation in pending) {
@@ -571,6 +929,34 @@ class RtcMesh {
       }
     }
   }
+}
+
+class _OutgoingFileTransfer {
+  _OutgoingFileTransfer({required this.id, required this.peerId});
+  final String id;
+  final String peerId;
+  final Completer<bool> accepted = Completer<bool>();
+  bool cancelled = false;
+  bool rejected = false;
+}
+
+class _IncomingFileTransfer {
+  _IncomingFileTransfer({
+    required this.id,
+    required this.peerId,
+    required this.peerName,
+    required this.fileName,
+    required this.size,
+  });
+  final String id;
+  final String peerId;
+  final String peerName;
+  final String fileName;
+  final int size;
+  final BytesBuilder builder = BytesBuilder(copy: false);
+  int transferred = 0;
+  int nextChunkIndex = 0;
+  bool accepted = false;
 }
 
 class _PeerLink {

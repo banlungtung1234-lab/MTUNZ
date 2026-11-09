@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-dev — 2026-11-09
+
+- Add peer-to-peer file sending and receiving over the existing WebRTC data channel; file contents are not uploaded to the signaling server.
+- Require the receiving device to approve each incoming file and choose a destination through the native save dialog.
+- Stream files in ordered 16 KB binary chunks with backpressure, per-chunk validation, progress reporting and cancellation.
+- Limit each file to 100 MB, sanitize incoming filenames, and retain a capped transfer history.
+- Add localized file-transfer UI in Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish.
+- Add protocol unit tests and bump the application version to 0.3.0+5.
+
 ## 0.2.0-dev — 2026-11-09
 
 - Refresh the futuristic interface with clearer visual hierarchy, gradient panels, responsive navigation and improved session/device cards.

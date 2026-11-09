@@ -16,6 +16,18 @@ void main() {
     expect(find.text('Kết nối mọi thiết bị.'), findsOneWidget);
   });
 
+  testWidgets('File transfer page is available and translated', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tệp tin').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Truyền tệp'), findsOneWidget);
+    expect(find.text('GỬI TỆP QUA WEBRTC'), findsOneWidget);
+    expect(find.textContaining('100 MB'), findsOneWidget);
+  });
+
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();

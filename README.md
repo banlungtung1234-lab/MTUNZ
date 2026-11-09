@@ -1,6 +1,6 @@
 # MTUNZ — native cross-device control
 
-**Version:** 0.2.0-dev  
+**Version:** 0.3.0-dev  
 **Platforms in this milestone:** Windows desktop + Android  
 **Application type:** Flutter native desktop/mobile (compiled EXE package + APK), not a website.
 
@@ -21,7 +21,7 @@ MTUNZ/
 └── docs/                        # Setup, security and milestone notes
 ```
 
-## Current 0.1.2-dev implementation
+## Current 0.3.0-dev implementation
 
 - Native Flutter user interface for Windows and Android.
 - Refreshed futuristic dashboard with responsive navigation, layered panels, clearer session cards and improved visual hierarchy.
@@ -36,6 +36,7 @@ MTUNZ/
 - Client signaling uses bounded exponential retry backoff, avoids repeating outage notices, and reports when signaling has recovered.
 - WebRTC peer connections with STUN discovery, offer/answer and ICE candidate exchange. Video sender reuse avoids creating a new transceiver on each screen-share restart; externally ended Android capture sessions trigger cleanup.
 - Screen capture via `getDisplayMedia` and remote video rendering.
+- Peer-to-peer file transfer over the existing WebRTC data channel: per-file receiver consent, ordered 16 KB binary chunks, send/receive progress, cancellation, filename sanitization, and a native save dialog. The current per-file limit is 100 MB; file bytes do not pass through the signaling server.
 - Android AccessibilityService bridge for normalized tap/swipe actions. The Android user must enable the service and approve each remote-control request.
 - Windows and Android build workflows are included. GitHub Actions can create an Android APK and a Windows release folder ZIP once the source is pushed to a repository.
 
@@ -46,9 +47,9 @@ This is a development milestone, not a finished UltraViewer replacement. In part
 1. No TURN relay is bundled yet. Direct P2P works only on network paths where ICE can establish a direct route; some mobile, office, school or carrier NATs will need TURN.
 2. The signaling server is intentionally HTTP for a trusted LAN test. Do **not** expose it directly to the public Internet. Public use needs HTTPS behind a TLS reverse proxy and a properly secured TURN service.
 3. Android screen capture requires the system's MediaProjection consent prompt each time. Remote tap/swipe requires the user to enable MTUNZ's Accessibility service and approve the incoming session.
-4. Windows/Android remote tap and swipe are included in the development source. Keyboard injection, file transfer, clipboard, audio, persistent trusted devices, account login and iOS are not implemented yet.
+4. Windows/Android remote tap and swipe and consent-based file transfer are included in the development source. File transfer is capped at 100 MB and buffers the completed received file in memory before opening the native save dialog. Keyboard injection, clipboard, audio, persistent trusted devices, account login and iOS are not implemented yet.
 5. Multi-peer signaling is limited to 3 devices per room. Simultaneous three-device streaming still needs soak testing on actual hardware and may require a TURN relay on restrictive networks.
-6. The app source has not been compiled in this container because Flutter/Dart, Android SDK and Windows desktop build tools are not installed here. The Go signaling server has been race-tested, vetted, integration-tested over HTTP, and cross-compiled for Windows. The Flutter project-preparation script was exercised against a mock Flutter CLI to validate its file injection steps; that is not a substitute for a real Flutter build. The native app binaries are therefore not yet available from this environment.
+6. CI build success does not replace a real device-to-device transfer test. Windows and Android must still be tested with a real file in both directions, including receiver rejection, save cancellation, interrupted connectivity and larger files. On restrictive networks, the lack of a TURN relay may prevent a direct WebRTC data-channel connection.
 
 ## Quick local network test (Windows + Android)
 
@@ -61,6 +62,7 @@ These steps apply after the Android APK and Windows desktop package have been bu
 5. Create a room on one device. Enter its room code and PIN on the other.
 6. Start screen sharing on the device whose screen should be viewed. Android will show its system sharing-consent screen.
 7. To control Android, the Android owner must enable MTUNZ Accessibility under Android Settings and approve the control request.
+8. To transfer a file, open **Files** in MTUNZ, choose the connected device and select a file. The receiving device must approve the incoming request and choose a save location. Each file is limited to 100 MB.
 
 Both devices must be on the same Wi-Fi for this first test. If the room connects but the video does not, the network may block direct P2P; TURN relay is the next networking milestone.
 
