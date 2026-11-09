@@ -73,3 +73,7 @@ services:
       - "--user-quota=8"
       - "--total-quota=200"
       - "--no-tls"
+
+networks:
+  mtunz-backend:
+    driver: bridge
