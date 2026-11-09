@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mtunz/main.dart';
@@ -36,7 +38,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('WI-FI / ETHERNET / USB'), findsOneWidget);
-    expect(find.text('Quét adapter mạng'), findsOneWidget);
+    if (Platform.isWindows) {
+      expect(find.text('Quét adapter mạng'), findsOneWidget);
+    } else {
+      expect(find.textContaining('Trên Windows, quét adapter'), findsOneWidget);
+    }
   });
 
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
