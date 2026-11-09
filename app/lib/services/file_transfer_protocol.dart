@@ -53,7 +53,12 @@ class FileTransferProtocol {
       if (frame[i] != _magic[i]) return null;
     }
 
-    final transferId = ascii.decode(frame.sublist(4, 36), allowInvalid: false);
+    late final String transferId;
+    try {
+      transferId = ascii.decode(frame.sublist(4, 36), allowInvalid: false);
+    } on FormatException {
+      return null;
+    }
     if (!isValidTransferId(transferId)) return null;
     final index = ByteData.sublistView(frame).getUint32(36, Endian.big);
     return FileTransferChunk(
