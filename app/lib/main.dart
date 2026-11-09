@@ -264,7 +264,7 @@ class _HomeShellState extends State<HomeShell> {
             content: Text(_t('accessibility_explain')),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_t('later'))),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('open_settings')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('open_settings'))),
             ],
           ),
         );
@@ -280,7 +280,7 @@ class _HomeShellState extends State<HomeShell> {
         content: Text(_t('control_request_body', {'name': peerName})),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_t('deny'))),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('allow')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(_t('allow'))),
         ],
       ),
     );
