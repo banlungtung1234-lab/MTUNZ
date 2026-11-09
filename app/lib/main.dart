@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -135,6 +137,9 @@ class _HomeShellState extends State<HomeShell> {
   SignalingClient? _signaling;
   RtcMesh? _mesh;
   List<PeerView> _peers = const [];
+  List<FileTransferView> _fileTransfers = const [];
+  String? _selectedFilePeerId;
+  bool _filePickerBusy = false;
 
   String _t(String key, [Map<String, String> values = const {}]) =>
       AppStrings.text(widget.locale.languageCode, key, values);
@@ -227,6 +232,9 @@ class _HomeShellState extends State<HomeShell> {
         if (!mounted) return;
         setState(() {
           _peers = peers;
+          if (_selectedFilePeerId == null || !peers.any((peer) => peer.id == _selectedFilePeerId)) {
+            _selectedFilePeerId = peers.isEmpty ? null : peers.first.id;
+          }
           _statusKey = peers.isEmpty ? 'status_waiting' : 'status_connected_count';
           _connectedPeerCount = peers.length;
         });
@@ -242,6 +250,12 @@ class _HomeShellState extends State<HomeShell> {
           _notice = message;
           _noticeIsKey = false;
         });
+      },
+      onFileOffer: _handleFileOffer,
+      onFileReceived: _saveReceivedFile,
+      onFileTransfersChanged: (transfers) {
+        if (!mounted) return;
+        setState(() => _fileTransfers = transfers);
       },
     );
     unawaited(_mesh!.handleExistingPeers(existingPeers));
@@ -287,6 +301,111 @@ class _HomeShellState extends State<HomeShell> {
     await _mesh?.setRemoteControlPermission(peerId, allow == true);
   }
 
+  Future<bool> _handleFileOffer(String peerId, String peerName, String fileName, int size) async {
+    if (!mounted) return false;
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.file_download_outlined, color: Color(0xFF55DFF4), size: 34),
+        title: Text(_t('files_offer_title')),
+        content: SizedBox(
+          width: 390,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_t('files_offer_body', {
+                'device': peerName,
+                'name': fileName,
+                'size': _formatBytes(size),
+              })),
+              const SizedBox(height: 12),
+              Text(_t('files_offer_note'), style: const TextStyle(color: Color(0xFF90A2BA), fontSize: 11)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(_t('files_decline'))),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.download_rounded, size: 17),
+            label: Text(_t('files_accept')),
+          ),
+        ],
+      ),
+    );
+    return accepted == true;
+  }
+
+  Future<bool> _saveReceivedFile(String peerName, String fileName, Uint8List bytes) async {
+    if (!mounted) return false;
+    final saved = await FilePicker.saveFile(
+      dialogTitle: _t('files_save_title'),
+      fileName: fileName,
+      bytes: bytes,
+      mimeType: 'application/octet-stream',
+    );
+    if (saved == null) {
+      _showSnack(_t('files_save_cancelled'));
+      return false;
+    }
+    _showSnack(_t('files_saved', {'name': fileName}));
+    return true;
+  }
+
+  Future<void> _startFileTransfer() async {
+    final mesh = _mesh;
+    final peerId = _selectedFilePeerId;
+    if (mesh == null || peerId == null) {
+      _showSnack(_t('files_need_connection'));
+      return;
+    }
+    if (_filePickerBusy) return;
+    setState(() => _filePickerBusy = true);
+    try {
+      final picked = await FilePicker.pickFile();
+      if (picked == null) return;
+      final size = picked.lengthSync() ?? await picked.length();
+      if (size == null) throw StateError(_t('files_cannot_read'));
+      if (size > FileTransferProtocol.maxFileBytes) {
+        throw StateError(_t('files_too_large'));
+      }
+      await mesh.sendFile(
+        peerId: peerId,
+        fileName: picked.name,
+        size: size,
+        content: picked.readAsByteStream(),
+      );
+    } catch (error) {
+      _showSnack(_t('operation_failed', {'error': '$error'}));
+    } finally {
+      if (mounted) setState(() => _filePickerBusy = false);
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  String _fileStatusLabel(String status) {
+    switch (status) {
+      case 'waiting': return _t('files_status_waiting');
+      case 'sending': return _t('files_status_sending');
+      case 'receiving': return _t('files_status_receiving');
+      case 'saving': return _t('files_status_saving');
+      case 'sent': return _t('files_status_sent');
+      case 'completed': return _t('files_status_completed');
+      case 'rejected': return _t('files_status_rejected');
+      case 'cancelled': return _t('files_status_cancelled');
+      case 'not_saved': return _t('files_status_not_saved');
+      default: return _t('files_status_failed');
+    }
+  }
+
   Future<void> _startShare() async {
     await _withBusy(() async {
       final mesh = _mesh;
@@ -329,6 +448,8 @@ class _HomeShellState extends State<HomeShell> {
         _sharing = false;
         _statusKey = 'status_not_connected';
         _connectedPeerCount = 0;
+        _fileTransfers = const [];
+        _selectedFilePeerId = null;
       });
     }
     if (firstError != null) {
@@ -436,6 +557,7 @@ class _HomeShellState extends State<HomeShell> {
       _buildDevices(),
       _buildSession(),
       _buildSettings(),
+      _buildFiles(),
     ];
     return Scaffold(
       body: SafeArea(
@@ -474,6 +596,7 @@ class _HomeShellState extends State<HomeShell> {
             _navItem(1, Icons.devices_rounded, _t('nav_devices')),
             _navItem(2, Icons.cast_connected_rounded, _t('nav_session')),
             _navItem(3, Icons.tune_rounded, _t('nav_settings')),
+            _navItem(4, Icons.folder_copy_rounded, _t('nav_files')),
             const Spacer(),
             _connectionCard(),
           ],
@@ -730,6 +853,105 @@ class _HomeShellState extends State<HomeShell> {
         ]),
       );
 
+  Widget _buildFiles() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_t('files_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(_t('files_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12)),
+          const SizedBox(height: 22),
+          _panel(
+            title: _t('files_transfer_title'),
+            subtitle: _t('files_transfer_subtitle'),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (_peers.isEmpty)
+                Text(_t('files_no_devices'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))
+              else ...[
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_selectedFilePeerId),
+                  initialValue: _selectedFilePeerId,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: _t('files_peer_label'),
+                    prefixIcon: const Icon(Icons.devices_rounded),
+                  ),
+                  items: _peers.map((peer) => DropdownMenuItem<String>(
+                    value: peer.id,
+                    child: Text(peer.name, overflow: TextOverflow.ellipsis),
+                  )).toList(),
+                  onChanged: (value) => setState(() => _selectedFilePeerId = value),
+                ),
+                const SizedBox(height: 13),
+                FilledButton.icon(
+                  onPressed: _filePickerBusy ? null : _startFileTransfer,
+                  icon: _filePickerBusy
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.upload_file_rounded, size: 18),
+                  label: Text(_t('files_choose_send')),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(_t('files_transfer_rule'), style: const TextStyle(color: Color(0xFF8FA2BA), fontSize: 10, height: 1.5)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _panel(
+            title: _t('files_history_title'),
+            subtitle: _t('files_history_subtitle'),
+            child: _fileTransfers.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(children: [
+                      const Icon(Icons.folder_open_rounded, color: Color(0xFF687D97), size: 30),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_t('files_empty'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))),
+                    ]),
+                  )
+                : Column(children: _fileTransfers.map(_fileTransferCard).toList()),
+          ),
+        ]),
+      );
+
+  Widget _fileTransferCard(FileTransferView transfer) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(
+              transfer.isOutgoing ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              color: const Color(0xFF53DDF2),
+              size: 18,
+            ),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(transfer.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              Text(
+                '${transfer.isOutgoing ? _t('files_to') : _t('files_from')} ${transfer.peerName} · ${_formatBytes(transfer.size)}',
+                style: const TextStyle(color: Color(0xFF8395AD), fontSize: 10),
+              ),
+            ])),
+            Text(_fileStatusLabel(transfer.status), style: const TextStyle(color: Color(0xFF9AB0C7), fontSize: 10)),
+            if (transfer.canCancel)
+              IconButton(
+                tooltip: _t('files_cancel'),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _mesh?.cancelFileTransfer(transfer.id),
+                icon: const Icon(Icons.close_rounded, size: 17),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: transfer.progress,
+            minHeight: 5,
+            borderRadius: BorderRadius.circular(8),
+            backgroundColor: const Color(0xFF23334A),
+          ),
+          const SizedBox(height: 5),
+          Text('${_formatBytes(transfer.transferred)} / ${_formatBytes(transfer.size)}',
+              style: const TextStyle(color: Color(0xFF7589A3), fontSize: 9)),
+          const Divider(height: 18, color: Color(0xFF24334A)),
+        ]),
+      );
+
   Widget _buildSettings() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -794,6 +1016,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: const Icon(Icons.devices_outlined), selectedIcon: const Icon(Icons.devices), label: _t('nav_devices')),
           NavigationDestination(icon: const Icon(Icons.cast_connected_outlined), selectedIcon: const Icon(Icons.cast_connected), label: _t('nav_session')),
           NavigationDestination(icon: const Icon(Icons.tune_outlined), selectedIcon: const Icon(Icons.tune), label: _t('nav_settings')),
+          NavigationDestination(icon: const Icon(Icons.folder_copy_outlined), selectedIcon: const Icon(Icons.folder_copy), label: _t('nav_files')),
         ],
       );
 }
