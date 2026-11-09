@@ -196,9 +196,6 @@ jobs:
       - name: Validate Docker Compose configuration
         run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
       - name: Validate Caddy reverse-proxy configuration
-        run: |
-          docker run --rm -e MTUNZ_DOMAIN=signal.example.com \\
-            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \\
-            caddy:2.11.9-alpine validate --config /etc/caddy/Caddyfile --adapter caddyfile
+        run: docker run --rm -e MTUNZ_DOMAIN=signal.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.9-alpine validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Build signaling server container
         run: docker build --pull --file server/Dockerfile --tag mtunz-signaling:ci server
