@@ -5,7 +5,10 @@ import 'package:mtunz/services/file_transfer_protocol.dart';
 
 void main() {
   test('encodes and decodes an ordered binary chunk', () {
-    final payload = Uint8List.fromList([0, 1, 2, 127, 255]);
+    final payload = Uint8List.fromList(List<int>.generate(
+      FileTransferProtocol.chunkBytes,
+      (index) => index & 0xFF,
+    ));
     final frame = FileTransferProtocol.encodeChunk(
       transferId: '0123456789abcdef0123456789abcdef',
       index: 42,
@@ -17,6 +20,17 @@ void main() {
     expect(decoded!.transferId, '0123456789abcdef0123456789abcdef');
     expect(decoded.index, 42);
     expect(decoded.payload, payload);
+  });
+
+  test('supports a 64 KiB transfer frame at the maximum chunk index', () {
+    expect(FileTransferProtocol.chunkBytes, 64 * 1024);
+    final frame = FileTransferProtocol.encodeChunk(
+      transferId: '0123456789abcdef0123456789abcdef',
+      index: 0xFFFFFFFF,
+      payload: Uint8List(FileTransferProtocol.chunkBytes),
+    );
+    expect(frame.length, FileTransferProtocol.headerBytes + 64 * 1024);
+    expect(FileTransferProtocol.decodeChunk(frame)?.payload.length, 64 * 1024);
   });
 
   test('rejects malformed frames and invalid chunk sizes', () {

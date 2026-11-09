@@ -11,9 +11,15 @@ class RoomInvite {
 }
 
 class JoinInfo {
-  const JoinInfo({required this.peerToken, required this.peers});
+  const JoinInfo({
+    required this.peerToken,
+    required this.peers,
+    this.iceServers = const [],
+  });
+
   final String peerToken;
   final List<Map<String, dynamic>> peers;
+  final List<Map<String, dynamic>> iceServers;
 }
 
 class SignalingHttpException implements Exception {
@@ -87,8 +93,42 @@ class SignalingClient {
     final peers = rawPeers is List
         ? rawPeers.whereType<Map<String, dynamic>>().toList(growable: false)
         : <Map<String, dynamic>>[];
+    final iceServers = _parseIceServers(response['iceServers']);
     unawaited(_startPolling());
-    return JoinInfo(peerToken: token, peers: peers);
+    return JoinInfo(peerToken: token, peers: peers, iceServers: iceServers);
+  }
+
+  List<Map<String, dynamic>> _parseIceServers(Object? raw) {
+    if (raw is! List) return const [];
+    final parsed = <Map<String, dynamic>>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final value = Map<String, dynamic>.from(item);
+      final rawUrls = value['urls'];
+      final urls = rawUrls is String
+          ? <String>[rawUrls]
+          : rawUrls is List
+              ? rawUrls.whereType<String>().toList(growable: false)
+              : const <String>[];
+      final validUrls = urls.where((url) {
+        final normalized = url.trim().toLowerCase();
+        return normalized.startsWith('stun:') ||
+            normalized.startsWith('stuns:') ||
+            normalized.startsWith('turn:') ||
+            normalized.startsWith('turns:');
+      }).toList(growable: false);
+      if (validUrls.isEmpty) continue;
+      final server = <String, dynamic>{'urls': validUrls};
+      final username = value['username'];
+      final credential = value['credential'];
+      if (username is String && username.isNotEmpty &&
+          credential is String && credential.isNotEmpty) {
+        server['username'] = username;
+        server['credential'] = credential;
+      }
+      parsed.add(server);
+    }
+    return parsed;
   }
 
   Future<void> sendSignal(String to, String type, Map<String, dynamic> data) async {

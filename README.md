@@ -40,9 +40,9 @@ MTUNZ/
 - Client signaling retries temporary queue-full (`503`) responses and serializes inbound events to preserve peer join/leave ordering.
 - Signaling presence uses a 90-second peer lease refreshed by long-poll requests; abandoned peers are removed, waiting polls are released, and remaining peers receive a peer-left event.
 - Client signaling uses bounded exponential retry backoff, avoids repeating outage notices, and reports when signaling has recovered.
-- WebRTC peer connections with STUN discovery, offer/answer and ICE candidate exchange. Interrupted links attempt bounded ICE restart/re-negotiation with a deterministic offerer to avoid offer collisions. Video sender reuse avoids creating a new transceiver on each screen-share restart; externally ended Android capture sessions trigger cleanup.
+- WebRTC peer connections with multiple STUN endpoints and optional coturn TURN credentials with a short expiry. ICE candidate batches reduce signaling requests; interrupted links attempt bounded ICE restart/re-negotiation with a deterministic offerer to avoid offer collisions. Video sender reuse avoids creating a new transceiver on each screen-share restart; externally ended Android capture sessions trigger cleanup.
 - Screen capture via `getDisplayMedia` and remote video rendering.
-- Peer-to-peer file transfer over the existing WebRTC data channel: per-file receiver consent, ordered 16 KB binary chunks, send/receive progress, cancellation, filename sanitization, and a native save dialog. The current per-file limit is 100 MB; only one receive/save operation is accepted at a time to bound mobile memory use; file bytes do not pass through the signaling server.
+- Peer-to-peer file transfer over the existing WebRTC data channel: per-file receiver consent, ordered 64 KB binary chunks, 4/2 MB adaptive send backpressure, 1 MB progress updates, cancellation, filename sanitization, and a native save dialog. The current per-file limit is 100 MB; only one receive/save operation is accepted at a time to bound mobile memory use; file bytes do not pass through the signaling server.
 - Android AccessibilityService bridge for normalized tap/swipe actions. The Android user must enable the service and approve each remote-control request.
 - Android and Windows x64 builds run in GitHub Actions. The Windows build is checked on both the Windows Server 2022 and current Windows runner images; the native runner is compiled against the Windows 10+ API baseline.
 
@@ -56,6 +56,12 @@ This is a development milestone, not a finished UltraViewer replacement. In part
 4. Windows/Android remote tap and swipe and consent-based file transfer are included in the development source. File transfer is capped at 100 MB and buffers the completed received file in memory before opening the native save dialog. Keyboard injection, clipboard, audio, persistent trusted devices and account login are not implemented yet. iOS/iPhone is intentionally out of scope.
 5. Multi-peer signaling is limited to 3 devices per room. Simultaneous three-device streaming still needs soak testing on actual hardware and may require a TURN relay on restrictive networks.
 6. CI build success does not replace a real device-to-device transfer test. Windows and Android must still be tested with a real file in both directions, including receiver rejection, save cancellation, interrupted connectivity and larger files. On restrictive networks, the lack of a TURN relay may prevent a direct WebRTC data-channel connection.
+
+## Wired network support
+
+Windows Settings can scan active IPv4 adapters and label Wi-Fi, Ethernet and common RNDIS/USB tether interfaces. For a cable connection, connect both devices to the same Ethernet network, or enable Android USB tethering and choose the Windows RNDIS/USB adapter address the phone can reach. Then set the Android signaling URL to `http://<Windows-IPv4>:8787`. The application uses normal IP networking; it does not require ADB or USB debugging.
+
+For remote Internet paths, the signaling server can issue temporary coturn credentials when `MTUNZ_TURN_URLS` and a strong `MTUNZ_TURN_SHARED_SECRET` are configured. Public use requires HTTPS signaling and a secured coturn deployment; TURN is optional and is not bundled as a public relay service.
 
 ## Quick local network test (Windows + Android)
 

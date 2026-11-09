@@ -65,6 +65,7 @@ class RtcMesh {
     required this.onFileOffer,
     required this.onFileReceived,
     required this.onFileTransfersChanged,
+    this.iceServers = const [],
   }) {
     _subscription = signaling.events.listen(
       _queueSignalMessage,
@@ -75,6 +76,7 @@ class RtcMesh {
   }
 
   final SignalingClient signaling;
+  final List<Map<String, dynamic>> iceServers;
   final void Function(List<PeerView> peers) onChanged;
   final Future<void> Function(String peerId, String peerName) onControlRequest;
   final void Function(String message) onNotice;
@@ -323,6 +325,7 @@ class RtcMesh {
 
       _updateFileTransfer(id, status: 'sending');
       var sentBytes = 0;
+      var lastProgressBytes = 0;
       var chunkIndex = 0;
       await for (final block in content) {
         for (var offset = 0; offset < block.length; offset += FileTransferProtocol.chunkBytes) {
@@ -340,7 +343,8 @@ class RtcMesh {
           await _sendFilePacket(channel, packet, isCancelled: () => transfer.cancelled || _disposed);
           sentBytes += payload.length;
           chunkIndex++;
-          if (chunkIndex % 8 == 0 || sentBytes == size) {
+          if (sentBytes - lastProgressBytes >= 1024 * 1024 || sentBytes == size) {
+            lastProgressBytes = sentBytes;
             _updateFileTransfer(id, transferred: sentBytes);
           }
         }
@@ -359,13 +363,24 @@ class RtcMesh {
     }
   }
 
-  Future<void> _sendFilePacket(RTCDataChannel channel, Uint8List packet, {required bool Function() isCancelled}) async {
-    while (await channel.getBufferedAmount() > 512 * 1024) {
-      if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
-      if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
-        throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+  static const int _fileChannelHighWaterBytes = 4 * 1024 * 1024;
+  static const int _fileChannelLowWaterBytes = 2 * 1024 * 1024;
+
+  Future<void> _sendFilePacket(
+    RTCDataChannel channel,
+    Uint8List packet, {
+    required bool Function() isCancelled,
+  }) async {
+    var buffered = await channel.getBufferedAmount();
+    if (buffered >= _fileChannelHighWaterBytes) {
+      while (buffered > _fileChannelLowWaterBytes) {
+        if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
+        if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+          throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        buffered = await channel.getBufferedAmount();
       }
-      await Future<void>.delayed(const Duration(milliseconds: 12));
     }
     if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
     if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
@@ -634,7 +649,8 @@ class RtcMesh {
       }
       return;
     }
-    if (type != 'offer' && type != 'answer' && type != 'candidate') return;
+    if (type != 'offer' && type != 'answer' &&
+        type != 'candidate' && type != 'candidate-batch') return;
     final from = message['from'] as String?;
     final data = message['data'] as Map<String, dynamic>?;
     if (!_isValidPeerId(from) || data == null) return;
@@ -655,15 +671,77 @@ class RtcMesh {
         link.remoteDescriptionSet = true;
         await _drainCandidates(link);
       }
+    } else if (type == 'candidate') {
+      await _addRemoteCandidate(link, data);
     } else {
-      final candidate = data['candidate'] as String?;
-      if (candidate != null) {
-        final ice = RTCIceCandidate(candidate, data['sdpMid'] as String?, data['sdpMLineIndex'] as int?);
-        if (link.remoteDescriptionSet) {
-          await link.connection.addCandidate(ice);
-        } else {
-          link.pendingCandidates.add(ice);
+      final candidates = data['candidates'];
+      if (candidates is List) {
+        for (final item in candidates) {
+          if (item is Map<String, dynamic>) await _addRemoteCandidate(link, item);
         }
+      }
+    }
+  }
+
+  Future<void> _addRemoteCandidate(_PeerLink link, Map<String, dynamic> data) async {
+    final candidate = data['candidate'] as String?;
+    if (candidate == null || candidate.isEmpty) return;
+    final rawIndex = data['sdpMLineIndex'];
+    final ice = RTCIceCandidate(
+      candidate,
+      data['sdpMid'] as String?,
+      rawIndex is num ? rawIndex.toInt() : null,
+    );
+    if (link.remoteDescriptionSet) {
+      await link.connection.addCandidate(ice);
+    } else {
+      link.pendingCandidates.add(ice);
+    }
+  }
+
+  void _queueLocalCandidate(_PeerLink link, Map<String, dynamic> candidate) {
+    if (_disposed || _links[link.id] != link) return;
+    link.pendingLocalCandidates.add(candidate);
+    if (link.pendingLocalCandidates.length >= 8) {
+      link.candidateBatchTimer?.cancel();
+      link.candidateBatchTimer = null;
+      unawaited(_flushLocalCandidates(link));
+    } else {
+      link.candidateBatchTimer ??= Timer(const Duration(milliseconds: 40), () {
+        link.candidateBatchTimer = null;
+        unawaited(_flushLocalCandidates(link));
+      });
+    }
+  }
+
+  Future<void> _flushLocalCandidates(_PeerLink link) async {
+    if (_disposed || _links[link.id] != link || link.flushingCandidates ||
+        link.pendingLocalCandidates.isEmpty) {
+      return;
+    }
+    link.flushingCandidates = true;
+    try {
+      while (!_disposed && _links[link.id] == link && link.pendingLocalCandidates.isNotEmpty) {
+        final count = math.min(8, link.pendingLocalCandidates.length);
+        final batch = link.pendingLocalCandidates.take(count).toList(growable: false);
+        link.pendingLocalCandidates.removeRange(0, count);
+        try {
+          await signaling.sendSignal(link.id, 'candidate-batch', {'candidates': batch});
+        } catch (_) {
+          link.pendingLocalCandidates.insertAll(0, batch);
+          rethrow;
+        }
+      }
+    } catch (error) {
+      if (!_disposed) onNotice('Không gửi được nhóm ICE candidate: $error');
+    } finally {
+      link.flushingCandidates = false;
+      if (!_disposed && _links[link.id] == link &&
+          link.pendingLocalCandidates.isNotEmpty && link.candidateBatchTimer == null) {
+        link.candidateBatchTimer = Timer(const Duration(milliseconds: 500), () {
+          link.candidateBatchTimer = null;
+          unawaited(_flushLocalCandidates(link));
+        });
       }
     }
   }
@@ -695,8 +773,11 @@ class RtcMesh {
 
       final configuration = <String, dynamic>{
         'sdpSemantics': 'unified-plan',
+        'iceCandidatePoolSize': 4,
         'iceServers': [
           {'urls': 'stun:stun.l.google.com:19302'},
+          {'urls': 'stun:stun.cloudflare.com:3478'},
+          ...iceServers,
         ],
       };
       connection = await createPeerConnection(configuration);
@@ -706,9 +787,7 @@ class RtcMesh {
       _links[peerId] = link;
       connection.onIceCandidate = (candidate) {
         if (candidate.candidate == null || _disposed || _links[peerId] != link) return;
-        signaling.sendSignal(peerId, 'candidate', candidate.toMap()).catchError((error) {
-          if (!_disposed) onNotice('Không gửi được ICE candidate: $error');
-        });
+        _queueLocalCandidate(link, candidate.toMap());
       };
       connection.onTrack = (event) {
         if (_disposed || _links[peerId] != link) return;
@@ -958,6 +1037,8 @@ class RtcMesh {
     _peerNames.remove(peerId);
     if (link == null) return;
     link.recoveryTimer?.cancel();
+    link.candidateBatchTimer?.cancel();
+    link.pendingLocalCandidates.clear();
     try {
       await link.connection.close();
     } finally {
@@ -1049,6 +1130,9 @@ class _PeerLink {
   bool remoteDescriptionSet = false;
   bool remoteSharing = false;
   Timer? recoveryTimer;
+  Timer? candidateBatchTimer;
+  final List<Map<String, dynamic>> pendingLocalCandidates = [];
+  bool flushingCandidates = false;
   int recoveryAttempts = 0;
   bool recoveryNoticeShown = false;
   bool recoveryExhausted = false;

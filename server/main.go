@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -83,16 +87,23 @@ type joinRequest struct {
 	JoinPin string `json:"joinPin"`
 }
 
+type iceServerConfig struct {
+	URLs       []string `json:"urls"`
+	Username   string   `json:"username,omitempty"`
+	Credential string   `json:"credential,omitempty"`
+}
+
 type joinResponse struct {
-	Peers     []PeerSummary `json:"peers"`
-	PeerToken string        `json:"peerToken"`
+	Peers      []PeerSummary     `json:"peers"`
+	PeerToken  string            `json:"peerToken"`
+	IceServers []iceServerConfig `json:"iceServers,omitempty"`
 }
 
 func main() {
 	s := newServer()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "mtunz-signaling", "version": "0.1.2-dev"})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "mtunz-signaling", "version": "0.3.1-dev"})
 	})
 	mux.HandleFunc("POST /api/rooms", s.createRoom)
 	mux.HandleFunc("POST /api/rooms/{code}/join", s.joinRoom)
@@ -290,7 +301,42 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, joinResponse{Peers: existing, PeerToken: peerToken})
+	writeJSON(w, http.StatusOK, joinResponse{
+		Peers: existing, PeerToken: peerToken,
+		IceServers: turnIceServers(req.PeerID, time.Now()),
+	})
+}
+
+// turnIceServers creates coturn TURN REST API credentials. The shared secret
+// stays on the signaling server; clients receive only peer-specific credentials
+// that expire after a short configured window.
+func turnIceServers(peerID string, now time.Time) []iceServerConfig {
+	secret := strings.TrimSpace(os.Getenv("MTUNZ_TURN_SHARED_SECRET"))
+	if len(secret) < 32 || strings.TrimSpace(peerID) == "" {
+		return nil
+	}
+	urls := make([]string, 0, 2)
+	for _, raw := range strings.Split(os.Getenv("MTUNZ_TURN_URLS"), ",") {
+		url := strings.TrimSpace(raw)
+		lower := strings.ToLower(url)
+		if strings.HasPrefix(lower, "turn:") || strings.HasPrefix(lower, "turns:") {
+			urls = append(urls, url)
+		}
+	}
+	if len(urls) == 0 {
+		return nil
+	}
+	ttlSeconds := int64(900)
+	if raw := strings.TrimSpace(os.Getenv("MTUNZ_TURN_CREDENTIAL_TTL_SECONDS")); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed >= 60 && parsed <= 3600 {
+			ttlSeconds = parsed
+		}
+	}
+	username := strconv.FormatInt(now.Add(time.Duration(ttlSeconds)*time.Second).Unix(), 10) + ":" + peerID
+	mac := hmac.New(sha1.New, []byte(secret))
+	_, _ = mac.Write([]byte(username))
+	credential := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return []iceServerConfig{{URLs: urls, Username: username, Credential: credential}}
 }
 
 func (s *Server) pollEvents(w http.ResponseWriter, r *http.Request) {
@@ -371,9 +417,25 @@ func (s *Server) sendSignal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "valid from, to and type are required", http.StatusBadRequest)
 		return
 	}
-	if msg.Type != "offer" && msg.Type != "answer" && msg.Type != "candidate" && msg.Type != "control-request" && msg.Type != "control-grant" && msg.Type != "control-revoke" && msg.Type != "renegotiate-request" {
+	if msg.Type != "offer" && msg.Type != "answer" && msg.Type != "candidate" && msg.Type != "candidate-batch" && msg.Type != "control-request" && msg.Type != "control-grant" && msg.Type != "control-revoke" && msg.Type != "renegotiate-request" {
 		http.Error(w, "unsupported message type", http.StatusBadRequest)
 		return
+	}
+	if msg.Type == "candidate-batch" {
+		var batch struct {
+			Candidates []map[string]json.RawMessage `json:"candidates"`
+		}
+		if err := json.Unmarshal(msg.Data, &batch); err != nil || len(batch.Candidates) == 0 || len(batch.Candidates) > 8 {
+			http.Error(w, "candidate batch must contain 1 to 8 candidates", http.StatusBadRequest)
+			return
+		}
+		for _, candidate := range batch.Candidates {
+			var value string
+			if raw := candidate["candidate"]; len(raw) == 0 || json.Unmarshal(raw, &value) != nil || value == "" || len(value) > 2048 {
+				http.Error(w, "candidate batch contains an invalid ICE candidate", http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	s.mu.Lock()
 	room := s.rooms[strings.ToUpper(strings.TrimSpace(r.PathValue("code")))]

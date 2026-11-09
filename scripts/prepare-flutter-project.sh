@@ -62,6 +62,25 @@ else:
     raise SystemExit("Could not find generated Android app Gradle file")
 PYMINSDK
 
+# Use the smaller binary-only Gradle distribution from Gradle's direct download host.
+"$PYTHON_BIN" - "$ROOT/app/android/gradle/wrapper/gradle-wrapper.properties" <<'PYGRADLEWRAPPER'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+match = re.search(r"gradle-([0-9.]+)-(?:all|bin)\.zip", source)
+if match is None:
+    raise SystemExit("Could not detect the generated Gradle wrapper version")
+version = match.group(1)
+distribution = f"distributionUrl=https\\://downloads.gradle.org/distributions/gradle-{version}-bin.zip"
+updated, count = re.subn(r"(?m)^distributionUrl=.*$", distribution, source, count=1)
+if count != 1:
+    raise SystemExit("Could not update Gradle distribution URL")
+path.write_text(updated, encoding="utf-8")
+PYGRADLEWRAPPER
+
 # Add the Windows native input bridge to the generated Flutter desktop runner.
 copy_tree "$ROOT/platform/windows/runner" "$ROOT/app/windows/runner"
 "$PYTHON_BIN" "$ROOT/scripts/inject-windows-controller.py" "$ROOT/app"

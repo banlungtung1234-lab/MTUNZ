@@ -28,6 +28,17 @@ void main() {
     expect(find.textContaining('100 MB'), findsOneWidget);
   });
 
+  testWidgets('Settings includes wired network setup guidance', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('WI-FI / ETHERNET / USB'), findsOneWidget);
+    expect(find.text('Quét adapter mạng'), findsOneWidget);
+  });
+
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();

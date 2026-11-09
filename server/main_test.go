@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -53,6 +57,19 @@ func TestCreateJoinAndSignal(t *testing.T) {
 	got := <-s.rooms[cr.Code].Peers["peer-bravo-123"].Events
 	if got.Type != "offer" || got.From != "peer-alpha-123" {
 		t.Fatalf("unexpected signal: %#v", got)
+	}
+
+	batchData := json.RawMessage(`{"candidates":[{"candidate":"candidate:1","sdpMid":"0","sdpMLineIndex":0}]}`)
+	batchBody, _ := json.Marshal(Message{Type: "candidate-batch", From: "peer-alpha-123", To: "peer-bravo-123", Data: batchData})
+	batchRequest := httptest.NewRequest(http.MethodPost, "/api/rooms/"+cr.Code+"/signal", bytes.NewReader(batchBody))
+	batchRequest.Header.Set("Authorization", "Bearer "+s.rooms[cr.Code].Peers["peer-alpha-123"].Token)
+	batchResponse := httptest.NewRecorder()
+	mux.ServeHTTP(batchResponse, batchRequest)
+	if batchResponse.Code != http.StatusAccepted {
+		t.Fatalf("candidate batch signal: %d %s", batchResponse.Code, batchResponse.Body.String())
+	}
+	if got := <-s.rooms[cr.Code].Peers["peer-bravo-123"].Events; got.Type != "candidate-batch" {
+		t.Fatalf("unexpected batched candidate signal: %#v", got)
 	}
 }
 
@@ -408,6 +425,45 @@ func randomTestRoomCode(index int) string {
 	return string(code)
 }
 
+
+func TestTurnIceServersGenerateShortLivedPeerSpecificCredentials(t *testing.T) {
+	secret := strings.Repeat("s", 40)
+	t.Setenv("MTUNZ_TURN_URLS", "turn:turn.example.net:3478?transport=udp, turns:turn.example.net:5349?transport=tcp,https://invalid.example")
+	t.Setenv("MTUNZ_TURN_SHARED_SECRET", secret)
+	t.Setenv("MTUNZ_TURN_CREDENTIAL_TTL_SECONDS", "900")
+
+	now := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	servers := turnIceServers("peer-alpha-123", now)
+	if len(servers) != 1 {
+		t.Fatalf("expected one TURN server configuration, got %d", len(servers))
+	}
+	wantURLs := []string{"turn:turn.example.net:3478?transport=udp", "turns:turn.example.net:5349?transport=tcp"}
+	if fmt.Sprint(servers[0].URLs) != fmt.Sprint(wantURLs) {
+		t.Fatalf("unexpected TURN URLs: %#v", servers[0].URLs)
+	}
+	wantUsername := fmt.Sprintf("%d:%s", now.Add(900*time.Second).Unix(), "peer-alpha-123")
+	if servers[0].Username != wantUsername {
+		t.Fatalf("unexpected expiry-bound username: %q", servers[0].Username)
+	}
+	mac := hmac.New(sha1.New, []byte(secret))
+	_, _ = mac.Write([]byte(wantUsername))
+	wantCredential := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	if servers[0].Credential != wantCredential {
+		t.Fatal("TURN credential did not match coturn REST HMAC")
+	}
+	other := turnIceServers("peer-bravo-123", now)
+	if len(other) != 1 || other[0].Credential == servers[0].Credential {
+		t.Fatal("TURN credentials must be peer-specific")
+	}
+}
+
+func TestTurnIceServersDisabledWithoutStrongSecretOrValidURL(t *testing.T) {
+	t.Setenv("MTUNZ_TURN_URLS", "https://not-a-turn-server")
+	t.Setenv("MTUNZ_TURN_SHARED_SECRET", strings.Repeat("x", 31))
+	if got := turnIceServers("peer-alpha-123", time.Now()); len(got) != 0 {
+		t.Fatalf("expected TURN to be disabled for an invalid secret/URL, got %#v", got)
+	}
+}
 
 func TestCleanupKeepsNewEmptyInvitationRoom(t *testing.T) {
 	server := newServer()
