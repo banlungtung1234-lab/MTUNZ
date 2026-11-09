@@ -679,7 +679,7 @@ class _HomeShellState extends State<HomeShell> {
           const SizedBox(height: 16),
           _panel(title: 'BẢO MẬT ĐIỀU KHIỂN ANDROID', subtitle: 'Chỉ bật quyền hỗ trợ khi bạn hiểu rõ quyền truy cập', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Android cần người dùng tự bật Dịch vụ trợ năng để nhận thao tác chạm từ xa. Mọi yêu cầu điều khiển phải được xác nhận trên điện thoại.', style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: const Text('Mở cài đặt Trợ năng Android'))])),
           const SizedBox(height: 16),
-          _panel(title: 'THÔNG TIN PHIÊN BẢN', subtitle: 'Bản phát triển đầu tiên', child: const Row(children: [Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), Spacer(), Text('0.1.1-dev  ·  Native development', style: TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
+          _panel(title: 'THÔNG TIN PHIÊN BẢN', subtitle: 'Bản phát triển đầu tiên', child: const Row(children: [Text('MTUNZ', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)), Spacer(), Text('0.1.2-dev  ·  Native development', style: TextStyle(color: Color(0xFF8FA1B9), fontSize: 10))])),
         ]),
       );
 
