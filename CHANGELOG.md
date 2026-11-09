@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-dev — 2026-11-09
+
+- Refresh the futuristic interface with clearer visual hierarchy, gradient panels, responsive navigation and improved session/device cards.
+- Add a persistent language selector for Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish.
+- Apply language changes immediately across dashboard, devices, remote session, settings, room dialogs and navigation.
+- Add widget coverage for runtime language switching and restoring the saved language after the app is reopened.
+- Bump the Android/Windows app version to 0.2.0+4.
+
 ## 0.1.2-dev — 2026-11-09
 
 - Add server-side peer presence leases: active clients refresh presence through authenticated long-poll requests.
