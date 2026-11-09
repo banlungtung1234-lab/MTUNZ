@@ -1,6 +1,6 @@
 # MTUNZ — native cross-device control
 
-**Version:** 0.1.2-dev  
+**Version:** 0.2.0-dev  
 **Platforms in this milestone:** Windows desktop + Android  
 **Application type:** Flutter native desktop/mobile (compiled EXE package + APK), not a website.
 
@@ -24,6 +24,8 @@ MTUNZ/
 ## Current 0.1.2-dev implementation
 
 - Native Flutter user interface for Windows and Android.
+- Refreshed futuristic dashboard with responsive navigation, layered panels, clearer session cards and improved visual hierarchy.
+- Six selectable interface languages: Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish. The selected language applies immediately and is saved on the device.
 - Temporary room creation with an 8-character room code and 6-digit invitation PIN.
 - Per-device bearer token after joining; rooms allow at most 3 devices and expire after 15 minutes.
 - Go signaling server with authenticated long-poll message exchange, constant-time PIN/token checks, bounded request bodies, queue-overload responses, and cleanup.
