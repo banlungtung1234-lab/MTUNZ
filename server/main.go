@@ -458,6 +458,9 @@ func (s *Server) cleanupLocked() {
 			delete(s.rooms, code)
 			continue
 		}
+		// A new invitation room is intentionally empty until its first peer joins.
+		// Only remove an empty room here if cleanup evicted its last existing peer.
+		hadPeers := len(room.Peers) > 0
 		for peerID, peer := range room.Peers {
 			// A client that crashes or loses power stops long-polling. Expire its
 			// membership so the room does not remain occupied for the full TTL.
@@ -465,7 +468,7 @@ func (s *Server) cleanupLocked() {
 				s.removePeerLocked(room, peerID)
 			}
 		}
-		if len(room.Peers) == 0 {
+		if hadPeers && len(room.Peers) == 0 {
 			delete(s.rooms, code)
 		}
 	}
