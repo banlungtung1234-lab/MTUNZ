@@ -1301,7 +1301,7 @@ class _HomeShellState extends State<HomeShell> {
                     // tree from ever settling in automated tests and can keep
                     // hidden pages animating in the background.
                     icon: const Icon(Icons.radar_rounded, size: 17),
-                    label: Text(_networkScanBusy ? 'Đang quét…' : _t('network_scan')),
+                    label: Text(_t('network_scan')),
                   ),
                 ),
                 if (_networkEndpoints.isEmpty && !_networkScanBusy)
