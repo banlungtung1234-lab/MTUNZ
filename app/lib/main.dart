@@ -884,7 +884,9 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 const SizedBox(height: 13),
                 FilledButton.icon(
-                  onPressed: _filePickerBusy ? null : _startFileTransfer,
+                  onPressed: _filePickerBusy || !_peers.any((peer) => peer.id == _selectedFilePeerId && peer.canSendFile)
+                      ? null
+                      : _startFileTransfer,
                   icon: _filePickerBusy
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.upload_file_rounded, size: 18),
