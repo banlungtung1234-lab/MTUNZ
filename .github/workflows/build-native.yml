@@ -10,6 +10,7 @@ on:
       - 'platform/**'
       - 'server/**'
       - 'scripts/**'
+      - 'deploy/**'
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - 'platform/**'
       - 'server/**'
       - 'scripts/**'
+      - 'deploy/**'
 
 permissions:
   contents: read
@@ -185,3 +187,13 @@ jobs:
         with:
           generate_release_notes: true
           files: release-assets/**/*
+
+  remote-deployment:
+    name: Validate Linux remote deployment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
+        run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
+      - name: Build signaling server container
+        run: docker build --pull --file server/Dockerfile --tag mtunz-signaling:ci server

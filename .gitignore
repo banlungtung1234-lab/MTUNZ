@@ -30,3 +30,7 @@ Thumbs.db
 # Generated release binaries
 /MTUNZ-Signaling-Windows.exe
 /server/MTUNZ-Signaling-Windows.exe
+
+# Remote Linux deployment secrets and certificates
+/deploy/.env
+/deploy/certs/

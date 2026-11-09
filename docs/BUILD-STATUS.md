@@ -56,11 +56,17 @@ CI proves static analysis, automated tests and native compilation. It does **not
 
 ## Current boundaries
 
-- **No public TURN service is bundled.** STUN alone cannot guarantee direct connectivity through carrier-grade or restrictive NAT. Configure coturn and the shared secret before expecting TURN relay to work.
-- **No public TLS deployment is bundled.** The signaling server currently uses HTTP for trusted-LAN development. Do not expose port 8787 directly to the public Internet; public operation needs HTTPS reverse proxying and a secured TURN deployment.
+- **No public TURN or signaling service is operated by MTUNZ.** A self-hosted Linux VPS template is provided under `deploy/`; users must supply their own host, DNS records, firewall rules and secrets. STUN alone cannot guarantee direct connectivity through carrier-grade or restrictive NAT.
+- **No public service is deployed by this repository.** The `deploy/` template puts the signaling service behind Caddy HTTPS and configures coturn over UDP/TCP. Do not expose port 8787 directly to the public Internet. TURN-over-TLS is not enabled in the sample yet.
 - USB support means ordinary IP networking over Android USB tethering/RNDIS or Ethernet. It is **not** a raw direct-USB transfer protocol and does not use ADB.
 - The receiver's in-memory assembly makes the 100 MiB cap a conservative limit, not a guarantee of low RAM use.
 - Remote keyboard injection, clipboard, audio, accounts, persistent trusted devices and iOS/iPhone are not implemented in this milestone.
+
+## Self-hosted deployment template
+
+- `server/Dockerfile` builds a non-root Linux signaling container.
+- `deploy/compose.yaml` starts signaling, Caddy HTTPS and coturn; `deploy/.env.example` contains placeholders only.
+- The workflow validates Compose configuration and builds the signaling container. This does not deploy a VPS, provision real DNS/certificates or prove external NAT traversal.
 
 ## Recommended next milestones
 

@@ -1,0 +1,7 @@
+{
+  # MTUNZ signaling uses long-poll HTTP requests; leave proxy streaming enabled.
+}
+
+{$MTUNZ_DOMAIN} {
+  reverse_proxy signaling:8787
+}

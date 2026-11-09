@@ -78,6 +78,10 @@ These steps apply after the Android APK and Windows desktop package have been bu
 
 Both devices must be able to reach the Windows signaling server over the same LAN or tethered IP network. Examples: Windows Ethernet + Android Wi-Fi on the same router, or Android USB tethering with Windows using the RNDIS adapter address. A USB cable alone is not a raw direct-USB transport. If the room connects but video/data does not, the network may block direct P2P; a deployed TURN relay is required for those restrictive paths.
 
+## Remote Internet deployment (optional)
+
+A Linux VPS deployment template is available in [deploy/README.md](deploy/README.md). It combines the Go signaling service, Caddy HTTPS reverse proxy and coturn TURN relay. It is not a hosted MTUNZ service: you need your own Linux VPS, DNS records, firewall access and secrets. The template currently uses TURN over UDP/TCP; TURN-over-TLS and real external NAT acceptance tests remain future work.
+
 ## Build pipeline
 
 The workflow `.github/workflows/build-native.yml` builds:

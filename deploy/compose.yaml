@@ -1,0 +1,75 @@
+name: mtunz-remote
+
+services:
+  signaling:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    image: mtunz-signaling:0.3.1
+    restart: unless-stopped
+    environment:
+      MTUNZ_ADDR: ":8787"
+      MTUNZ_TURN_URLS: "${MTUNZ_TURN_URLS:?Set MTUNZ_TURN_URLS in deploy/.env}"
+      MTUNZ_TURN_SHARED_SECRET: "${MTUNZ_TURN_SHARED_SECRET:?Set MTUNZ_TURN_SHARED_SECRET in deploy/.env}"
+      MTUNZ_TURN_CREDENTIAL_TTL_SECONDS: "${MTUNZ_TURN_CREDENTIAL_TTL_SECONDS:-900}"
+    expose:
+      - "8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mtunz-backend
+
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    environment:
+      MTUNZ_DOMAIN: "${MTUNZ_DOMAIN:?Set MTUNZ_DOMAIN in deploy/.env}"
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      signaling:
+        condition: service_healthy
+    networks:
+      - mtunz-backend
+
+  # Coturn uses host networking on Linux to avoid Docker NAT overhead for
+  # the large WebRTC relay port range. See deploy/README.md before opening ports.
+  coturn:
+    image: coturn/coturn:4.18.0
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${MTUNZ_TURN_SHARED_SECRET:?Set MTUNZ_TURN_SHARED_SECRET in deploy/.env}"
+      - "--realm=${TURN_REALM:?Set TURN_REALM in deploy/.env}"
+      - "--listening-port=3478"
+      - "--min-port=49160"
+      - "--max-port=49200"
+      - "--external-ip=${TURN_EXTERNAL_IP:?Set TURN_EXTERNAL_IP in deploy/.env}"
+      - "--fingerprint"
+      - "--no-cli"
+      - "--no-multicast-peers"
+      - "--no-loopback-peers"
+      - "--stale-nonce"
+      - "--user-quota=8"
+      - "--total-quota=200"
+      - "--no-tls"
