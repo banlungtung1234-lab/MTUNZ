@@ -29,7 +29,7 @@ cp "$ROOT/platform/android/app/src/main/AndroidManifest.xml" "$ROOT/app/android/
 cp "$ROOT/platform/android/app/proguard-rules.pro" "$ROOT/app/android/app/proguard-rules.pro"
 
 # flutter_webrtc and the native MediaProjection bridge are built with Android
-# API 23 as the minimum supported level for this project.
+# API 24 as the minimum supported level for this project.
 "$PYTHON_BIN" - "$ROOT/app/android/app" <<'PYMINSDK'
 from pathlib import Path
 import re
@@ -42,14 +42,14 @@ for name in ("build.gradle.kts", "build.gradle"):
         continue
     source = path.read_text(encoding="utf-8")
     if name.endswith(".kts"):
-        updated = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 23", source)
-        updated = re.sub(r"minSdk\s*=\s*\d+", "minSdk = 23", updated)
+        updated = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 24", source)
+        updated = re.sub(r"minSdk\s*=\s*\d+", "minSdk = 24", updated)
         marker = re.search(r"buildTypes\s*\{\s*release\s*\{", updated)
         if marker and "proguardFiles(" not in updated:
             updated = updated[:marker.end()] + '\n        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")' + updated[marker.end():]
     else:
-        updated = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 23", source)
-        updated = re.sub(r"minSdkVersion\s+\d+", "minSdkVersion 23", updated)
+        updated = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 24", source)
+        updated = re.sub(r"minSdkVersion\s+\d+", "minSdkVersion 24", updated)
         marker = re.search(r"buildTypes\s*\{\s*release\s*\{", updated)
         if marker and "proguardFiles" not in updated:
             updated = updated[:marker.end()] + "\n        proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'" + updated[marker.end():]
@@ -62,9 +62,46 @@ else:
     raise SystemExit("Could not find generated Android app Gradle file")
 PYMINSDK
 
+# Use the smaller binary-only Gradle distribution from Gradle's direct download host.
+"$PYTHON_BIN" - "$ROOT/app/android/gradle/wrapper/gradle-wrapper.properties" <<'PYGRADLEWRAPPER'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+match = re.search(r"gradle-([0-9.]+)-(?:all|bin)\.zip", source)
+if match is None:
+    raise SystemExit("Could not detect the generated Gradle wrapper version")
+version = match.group(1)
+distribution = f"distributionUrl=https\\://downloads.gradle.org/distributions/gradle-{version}-bin.zip"
+updated, count = re.subn(r"(?m)^distributionUrl=.*$", distribution, source, count=1)
+if count != 1:
+    raise SystemExit("Could not update Gradle distribution URL")
+path.write_text(updated, encoding="utf-8")
+PYGRADLEWRAPPER
+
 # Add the Windows native input bridge to the generated Flutter desktop runner.
 copy_tree "$ROOT/platform/windows/runner" "$ROOT/app/windows/runner"
 "$PYTHON_BIN" "$ROOT/scripts/inject-windows-controller.py" "$ROOT/app"
+
+# Keep the native runner compatible with Windows 10 and Windows 11. The
+# Windows 10 API baseline also applies to Windows 11, which reports NT 10.0.
+"$PYTHON_BIN" - "$ROOT/app/windows/CMakeLists.txt" <<'PYWINDOWSAPI'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+match = re.search(r"(?m)^\s*project\([^\r\n]+\)\s*$", source)
+definitions = "add_compile_definitions(WINVER=0x0A00 _WIN32_WINNT=0x0A00)"
+if match is None:
+    raise SystemExit("Could not find generated Windows CMake project declaration")
+if definitions not in source:
+    source = source[:match.end()] + "\n\n# Build against the Windows 10+ API baseline for Windows 10/11.\n" + definitions + source[match.end():]
+    path.write_text(source, encoding="utf-8")
+PYWINDOWSAPI
 
 # Give the packaged executable and its window the MTUNZ product name.
 "$PYTHON_BIN" - "$ROOT/app/windows" <<'PYWINDOWNAME'

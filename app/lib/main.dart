@@ -14,6 +14,7 @@ import 'services/platform_controller.dart';
 import 'services/file_transfer_protocol.dart';
 import 'services/rtc_mesh.dart';
 import 'services/signaling_client.dart';
+import 'services/network_interfaces.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -141,6 +142,8 @@ class _HomeShellState extends State<HomeShell> {
   List<FileTransferView> _fileTransfers = const [];
   String? _selectedFilePeerId;
   bool _filePickerBusy = false;
+  bool _networkScanBusy = false;
+  List<NetworkEndpoint> _networkEndpoints = const [];
 
   String _t(String key, [Map<String, String> values = const {}]) =>
       AppStrings.text(widget.locale.languageCode, key, values);
@@ -167,7 +170,7 @@ class _HomeShellState extends State<HomeShell> {
           await client.leave();
           return;
         }
-        _attach(client, joined.peers);
+        _attach(client, joined);
         attached = true;
         setState(() {
           _roomCode = invite.code;
@@ -202,7 +205,7 @@ class _HomeShellState extends State<HomeShell> {
           await client.leave();
           return;
         }
-        _attach(client, joined.peers);
+        _attach(client, joined);
         attached = true;
         setState(() {
           _roomCode = code;
@@ -225,10 +228,11 @@ class _HomeShellState extends State<HomeShell> {
         deviceName: Platform.isAndroid ? 'MTUNZ Android' : 'MTUNZ Windows',
       );
 
-  void _attach(SignalingClient client, List<Map<String, dynamic>> existingPeers) {
+  void _attach(SignalingClient client, JoinInfo joined) {
     _signaling = client;
     _mesh = RtcMesh(
       signaling: client,
+      iceServers: joined.iceServers,
       onChanged: (peers) {
         if (!mounted) return;
         setState(() {
@@ -259,7 +263,7 @@ class _HomeShellState extends State<HomeShell> {
         setState(() => _fileTransfers = transfers);
       },
     );
-    unawaited(_mesh!.handleExistingPeers(existingPeers));
+    unawaited(_mesh!.handleExistingPeers(joined.peers));
   }
 
   Future<void> _handleControlRequest(String peerId, String peerName) async {
@@ -533,6 +537,35 @@ class _HomeShellState extends State<HomeShell> {
     setState(() => _selectedIndex = 3);
     _showSnack(_t('server_required'));
     return false;
+  }
+
+  Future<void> _scanNetworkInterfaces() async {
+    if (_networkScanBusy) return;
+    setState(() => _networkScanBusy = true);
+    try {
+      final endpoints = await NetworkInterfaceDiscovery.discover();
+      if (mounted) setState(() => _networkEndpoints = endpoints);
+    } catch (error) {
+      _showSnack(_t('operation_failed', {'error': '$error'}));
+    } finally {
+      if (mounted) setState(() => _networkScanBusy = false);
+    }
+  }
+
+  String _networkKindLabel(NetworkLinkKind kind) {
+    switch (kind) {
+      case NetworkLinkKind.wifi:
+        return _t('network_type_wifi');
+      case NetworkLinkKind.wired:
+        return _t('network_type_wired');
+      case NetworkLinkKind.other:
+        return _t('network_type_other');
+    }
+  }
+
+  void _useNetworkAddress(NetworkEndpoint endpoint) {
+    _serverController.text = 'http://${endpoint.address}:8787';
+    _saveServer();
   }
 
   void _saveServer() {
@@ -980,6 +1013,76 @@ class _HomeShellState extends State<HomeShell> {
           )),
           const SizedBox(height: 16),
           _panel(title: _t('core_title'), subtitle: _t('core_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextField(controller: _serverController, decoration: InputDecoration(labelText: _t('server_address'), hintText: 'http://192.168.1.10:8787')), const SizedBox(height: 10), FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))), const SizedBox(height: 8), Text(_t('server_help'), style: const TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5))])),
+          const SizedBox(height: 16),
+          _panel(
+            title: _t('network_links_title'),
+            subtitle: _t('network_links_subtitle'),
+            child: Platform.isWindows
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed: _networkScanBusy ? null : _scanNetworkInterfaces,
+                          icon: _networkScanBusy
+                              ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.radar_rounded, size: 17),
+                          label: Text(_t('network_scan')),
+                        ),
+                      ),
+                      if (_networkEndpoints.isEmpty && !_networkScanBusy)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(_t('network_none'), style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 11)),
+                        ),
+                      for (final endpoint in _networkEndpoints)
+                        Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0C1728),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF263B56)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                endpoint.kind == NetworkLinkKind.wired
+                                    ? Icons.cable_rounded
+                                    : endpoint.kind == NetworkLinkKind.wifi
+                                        ? Icons.wifi_rounded
+                                        : Icons.lan_rounded,
+                                color: const Color(0xFF55DDF2),
+                                size: 19,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(endpoint.interfaceName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    Text(
+                                      '${_networkKindLabel(endpoint.kind)} · ${endpoint.address}',
+                                      style: const TextStyle(fontSize: 10, color: Color(0xFF8FA1B9)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _useNetworkAddress(endpoint),
+                                child: Text(_t('network_use_address'), style: const TextStyle(fontSize: 10)),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  )
+                : Text(
+                    _t('network_android_help'),
+                    style: const TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5),
+                  ),
+          ),
           const SizedBox(height: 16),
           _panel(title: _t('security_title'), subtitle: _t('security_subtitle'), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('accessibility_help'), style: const TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.5)), const SizedBox(height: 12), OutlinedButton.icon(onPressed: Platform.isAndroid ? PlatformController.openAccessibilitySettings : null, icon: const Icon(Icons.accessibility_new_rounded), label: Text(_t('open_accessibility')))])),
           const SizedBox(height: 16),

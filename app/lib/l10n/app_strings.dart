@@ -30,7 +30,7 @@ class AppStrings {
     'server_required','server_invalid','server_saved','join_success','operation_failed','share_first',
     'accessibility_required','accessibility_explain','open_settings','later','control_request_title',
     'control_request_body','deny','allow','unsupported_platform',
-    'nav_files','files_title','files_subtitle','files_transfer_title','files_transfer_subtitle','files_no_devices','files_peer_label','files_choose_send','files_transfer_rule','files_history_title','files_history_subtitle','files_empty','files_to','files_from','files_cancel','files_status_waiting','files_status_sending','files_status_receiving','files_status_saving','files_status_sent','files_status_completed','files_status_rejected','files_status_cancelled','files_status_not_saved','files_status_failed','files_offer_title','files_offer_body','files_offer_note','files_decline','files_accept','files_save_title','files_save_cancelled','files_saved','files_need_connection','files_cannot_read','files_too_large'
+    'nav_files','files_title','files_subtitle','files_transfer_title','files_transfer_subtitle','files_no_devices','files_peer_label','files_choose_send','files_transfer_rule','files_history_title','files_history_subtitle','files_empty','files_to','files_from','files_cancel','files_status_waiting','files_status_sending','files_status_receiving','files_status_saving','files_status_sent','files_status_completed','files_status_rejected','files_status_cancelled','files_status_not_saved','files_status_failed','files_offer_title','files_offer_body','files_offer_note','files_decline','files_accept','files_save_title','files_save_cancelled','files_saved','files_need_connection','files_cannot_read','files_too_large','network_links_title','network_links_subtitle','network_scan','network_use_address','network_none','network_type_wifi','network_type_wired','network_type_other','network_android_help'
   ];
 
   static const _values = <String, List<String>>{
@@ -51,7 +51,7 @@ class AppStrings {
       'APP LANGUAGE','Choose the language used across MTUNZ. Changes apply immediately.','Display language','Language updated',
       'MTUNZ CORE / SIGNALING','The server handles pairing signals; screen video is sent peer-to-peer.','Signaling server address','Save server address','On Android, enter the LAN IP of the PC running MTUNZ Signaling Server (for example, http://192.168.1.20:8787), not 127.0.0.1. On the PC running the server locally, use http://127.0.0.1:8787. Internet access requires HTTPS and TURN.',
       'ANDROID CONTROL PERMISSIONS','Enable remote support access only when you understand the permission.','Android requires the device owner to enable MTUNZ Accessibility to receive remote taps. Every incoming control request must be approved on the phone.','Open Android Accessibility settings',
-      'VERSION INFORMATION','Early development build','0.3.0-dev  ·  Native development',
+      'VERSION INFORMATION','Early development build','0.3.1-dev  ·  Native development',
       'MTUNZ room created','Enter both codes on the other device. Only share them with someone you trust.','ROOM CODE','INVITE PIN','This room expires in {minutes} minutes.','Close',
       'Join a device','8-character room code','6-digit PIN','Cancel','Connect','The room code must have 8 characters and the invite PIN must have 6 digits.',
       'Enter the MTUNZ Signaling Server address in Settings first.','Invalid address. Example: http://192.168.1.20:8787','Server address saved for the next session.','Joined room {code}.','Could not complete the action: {error}','Create or join a room first.',
@@ -92,7 +92,16 @@ class AppStrings {
       "Saved file: {name}",
       "Join a room and connect to a device first.",
       "The selected file could not be read.",
-      "The file exceeds the 100 MB limit. Choose a smaller file."
+      "The file exceeds the 100 MB limit. Choose a smaller file.",
+      "WI-FI / ETHERNET / USB",
+      "Use Wi-Fi, Ethernet or Android USB tethering. Scan the Windows PC's active IPv4 adapters and select the address the phone can reach.",
+      "Scan adapters",
+      "Use address",
+      "No active IPv4 address was found. Connect Wi-Fi, Ethernet or USB tethering and scan again.",
+      "Wi-Fi",
+      "Ethernet / USB tethering",
+      "Other network",
+      "On Windows, scan the active adapters and choose the PC's IPv4 address. Enter that address here with port 8787. USB tethering works when Windows shows an RNDIS/USB network adapter."
     ],
     'vi': [
       'Chưa kết nối','Đang chờ thiết bị','Đã vào phòng','Đã kết nối {count} thiết bị',
@@ -111,7 +120,7 @@ class AppStrings {
       'NGÔN NGỮ ỨNG DỤNG','Chọn ngôn ngữ hiển thị cho toàn bộ MTUNZ. Thay đổi được áp dụng ngay.','Ngôn ngữ hiển thị','Đã đổi ngôn ngữ',
       'MTUNZ CORE / SIGNALING','Máy chủ xử lý tín hiệu ghép nối; video màn hình được truyền ngang hàng.','Địa chỉ máy chủ điều phối','Lưu địa chỉ máy chủ','Trên Android, nhập IP LAN của PC đang chạy MTUNZ Signaling Server (ví dụ http://192.168.1.20:8787), không dùng 127.0.0.1. Trên PC chạy server cùng máy có thể dùng http://127.0.0.1:8787. Kết nối Internet cần HTTPS và TURN.',
       'QUYỀN ĐIỀU KHIỂN ANDROID','Chỉ bật quyền hỗ trợ khi bạn hiểu rõ quyền truy cập.','Android cần chủ thiết bị tự bật MTUNZ trong Cài đặt Trợ năng để nhận thao tác chạm từ xa. Mọi yêu cầu điều khiển đều phải được chấp thuận trên điện thoại.','Mở cài đặt Trợ năng Android',
-      'THÔNG TIN PHIÊN BẢN','Bản phát triển ban đầu','0.3.0-dev  ·  Native development',
+      'THÔNG TIN PHIÊN BẢN','Bản phát triển ban đầu','0.3.1-dev  ·  Native development',
       'MTUNZ đã tạo phòng','Nhập hai mã này trên thiết bị còn lại. Chỉ chia sẻ với người bạn tin cậy.','MÃ PHÒNG','MÃ MỜI','Phòng tự hết hạn sau {minutes} phút.','Đóng',
       'Tham gia thiết bị','Mã phòng gồm 8 ký tự','Mã PIN gồm 6 chữ số','Hủy','Kết nối','Mã phòng cần 8 ký tự và mã mời cần 6 chữ số.',
       'Hãy nhập địa chỉ MTUNZ Signaling Server trong Cài đặt trước.','Địa chỉ không hợp lệ. Ví dụ: http://192.168.1.20:8787','Đã lưu địa chỉ máy chủ cho phiên mới.','Đã tham gia phòng {code}.','Không thực hiện được: {error}','Hãy tạo hoặc tham gia phòng trước.',
@@ -152,7 +161,16 @@ class AppStrings {
       "Đã lưu tệp: {name}",
       "Hãy tham gia phòng và kết nối với một thiết bị trước.",
       "Không thể đọc tệp đã chọn.",
-      "Tệp vượt giới hạn 100 MB. Hãy chọn tệp nhỏ hơn."
+      "Tệp vượt giới hạn 100 MB. Hãy chọn tệp nhỏ hơn.",
+      "WI-FI / ETHERNET / USB",
+      "Dùng Wi-Fi, dây Ethernet hoặc chia sẻ Internet USB từ Android. Quét các adapter IPv4 trên PC Windows và chọn địa chỉ mà điện thoại truy cập được.",
+      "Quét adapter mạng",
+      "Dùng địa chỉ này",
+      "Chưa thấy địa chỉ IPv4 đang hoạt động. Hãy kết nối Wi-Fi, Ethernet hoặc USB tethering rồi quét lại.",
+      "Wi-Fi",
+      "Ethernet / USB tethering",
+      "Mạng khác",
+      "Trên Windows, quét adapter đang hoạt động và chọn IPv4 của PC. Nhập địa chỉ đó tại đây cùng cổng 8787. USB tethering dùng được khi Windows nhận adapter mạng RNDIS/USB."
     ],
     'zh': [
       '未连接','正在等待设备','已加入房间','已连接 {count} 台设备',
@@ -171,7 +189,7 @@ class AppStrings {
       '应用语言','选择 MTUNZ 的显示语言。更改立即生效。','显示语言','语言已更新',
       'MTUNZ 核心 / 信令','服务器处理配对信令；屏幕视频采用点对点传输。','信令服务器地址','保存服务器地址','在 Android 上输入运行 MTUNZ 信令服务器的电脑局域网 IP，例如 http://192.168.1.20:8787，不要使用 127.0.0.1。电脑本机使用 http://127.0.0.1:8787。互联网连接需要 HTTPS 和 TURN。',
       'ANDROID 控制权限','请仅在了解权限用途后启用远程支持。','Android 设备所有者必须在无障碍设置中启用 MTUNZ 才能接收远程点击。每个控制请求都必须在手机上批准。','打开 Android 无障碍设置',
-      '版本信息','早期开发版本','0.3.0-dev  ·  原生应用开发',
+      '版本信息','早期开发版本','0.3.1-dev  ·  原生应用开发',
       'MTUNZ 房间已创建','在另一台设备上输入这两个代码。请只与信任的人分享。','房间码','邀请码 PIN','此房间将在 {minutes} 分钟后过期。','关闭',
       '连接设备','8 位房间码','6 位 PIN','取消','连接','房间码必须为 8 个字符，邀请码必须为 6 位数字。',
       '请先在设置中输入 MTUNZ 信令服务器地址。','地址无效。示例：http://192.168.1.20:8787','服务器地址已保存，将用于下一次会话。','已加入房间 {code}。','操作失败：{error}','请先创建或加入房间。',
@@ -212,7 +230,16 @@ class AppStrings {
       "已保存文件：{name}",
       "请先加入房间并连接设备。",
       "无法读取所选文件。",
-      "文件超过 100 MB 限制，请选择较小的文件。"
+      "文件超过 100 MB 限制，请选择较小的文件。",
+      "Wi-Fi / 以太网 / USB",
+      "可使用 Wi-Fi、以太网线或 Android USB 网络共享。扫描 Windows 电脑的活动 IPv4 网卡，并选择手机可以访问的地址。",
+      "扫描网卡",
+      "使用此地址",
+      "未检测到活动 IPv4 地址。请连接 Wi-Fi、以太网或 USB 网络共享后重试。",
+      "Wi-Fi",
+      "以太网 / USB 网络共享",
+      "其他网络",
+      "在 Windows 上扫描活动网卡并选择电脑的 IPv4 地址，然后在此处填写该地址和端口 8787。启用 Android USB 网络共享后，Windows 应显示 RNDIS/USB 网卡。"
     ],
     'ja': [
       '未接続','デバイスを待機中','ルームに参加しました','{count} 台のデバイスが接続中',
@@ -231,7 +258,7 @@ class AppStrings {
       'アプリの言語','MTUNZ 全体の表示言語を選択します。変更はすぐに反映されます。','表示言語','言語を更新しました',
       'MTUNZ コア / シグナリング','サーバーはペアリング信号を処理し、画面映像はP2Pで送信します。','シグナリングサーバーアドレス','サーバーアドレスを保存','Android では MTUNZ シグナリングサーバーを実行する PC の LAN IP（例：http://192.168.1.20:8787）を入力し、127.0.0.1 は使用しないでください。PC 上では http://127.0.0.1:8787 を使用できます。インターネット接続には HTTPS と TURN が必要です。',
       'ANDROID の操作権限','権限を理解したうえでリモートサポートを有効にしてください。','リモートタップを受信するには、端末の所有者が Android のユーザー補助設定で MTUNZ を有効にする必要があります。操作リクエストは毎回スマートフォンで承認します。','Android ユーザー補助設定を開く',
-      'バージョン情報','初期開発ビルド','0.3.0-dev  ·  ネイティブ開発',
+      'バージョン情報','初期開発ビルド','0.3.1-dev  ·  ネイティブ開発',
       'MTUNZ ルームを作成しました','もう一方のデバイスで2つのコードを入力してください。信頼できる相手とのみ共有してください。','ルームコード','招待 PIN','このルームはあと {minutes} 分で期限切れになります。','閉じる',
       'デバイスに参加','8文字のルームコード','6桁のPIN','キャンセル','接続','ルームコードは8文字、招待PINは6桁で入力してください。',
       '先に設定で MTUNZ シグナリングサーバーを入力してください。','アドレスが無効です。例：http://192.168.1.20:8787','サーバーアドレスを次のセッション用に保存しました。','ルーム {code} に参加しました。','操作を完了できませんでした：{error}','先にルームを作成するか参加してください。',
@@ -272,7 +299,16 @@ class AppStrings {
       "ファイルを保存しました：{name}",
       "先にルームに参加してデバイスへ接続してください。",
       "選択したファイルを読み取れませんでした。",
-      "ファイルが 100 MB の上限を超えています。小さいファイルを選択してください。"
+      "ファイルが 100 MB の上限を超えています。小さいファイルを選択してください。",
+      "Wi-Fi / Ethernet / USB",
+      "Wi-Fi、有線 Ethernet、Android の USB テザリングを使用できます。Windows PC の有効な IPv4 アダプターをスキャンし、スマートフォンから到達できるアドレスを選択します。",
+      "アダプターをスキャン",
+      "このアドレスを使用",
+      "有効な IPv4 アドレスが見つかりません。Wi-Fi、Ethernet、USB テザリングに接続して再スキャンしてください。",
+      "Wi-Fi",
+      "Ethernet / USB テザリング",
+      "その他のネットワーク",
+      "Windows で有効なアダプターをスキャンし、PC の IPv4 アドレスを選択してポート 8787 とともに入力します。USB テザリングでは Windows に RNDIS/USB ネットワークアダプターが表示されます。"
     ],
     'ko': [
       '연결되지 않음','기기 연결 대기 중','룸에 참가함','기기 {count}대 연결됨',
@@ -291,7 +327,7 @@ class AppStrings {
       '앱 언어','MTUNZ 전체에 사용할 언어를 선택하세요. 변경 사항은 즉시 적용됩니다.','표시 언어','언어가 변경되었습니다',
       'MTUNZ 코어 / 시그널링','서버는 페어링 신호를 처리하고 화면 영상은 P2P로 전송합니다.','시그널링 서버 주소','서버 주소 저장','Android에서는 MTUNZ 시그널링 서버를 실행하는 PC의 LAN IP(예: http://192.168.1.20:8787)를 입력하고 127.0.0.1은 사용하지 마세요. PC에서는 http://127.0.0.1:8787을 사용할 수 있습니다. 인터넷 연결에는 HTTPS와 TURN이 필요합니다.',
       'ANDROID 제어 권한','권한을 이해한 경우에만 원격 지원을 활성화하세요.','원격 터치를 받으려면 기기 소유자가 Android 접근성 설정에서 MTUNZ를 활성화해야 합니다. 모든 제어 요청은 휴대전화에서 승인해야 합니다.','Android 접근성 설정 열기',
-      '버전 정보','초기 개발 빌드','0.3.0-dev  ·  네이티브 개발',
+      '버전 정보','초기 개발 빌드','0.3.1-dev  ·  네이티브 개발',
       'MTUNZ 룸이 생성되었습니다','다른 기기에서 두 코드를 입력하세요. 신뢰하는 사람과만 공유하세요.','룸 코드','초대 PIN','{minutes}분 후 룸이 만료됩니다.','닫기',
       '기기 참가','8자리 룸 코드','6자리 PIN','취소','연결','룸 코드는 8자, 초대 PIN은 6자리 숫자여야 합니다.',
       '먼저 설정에서 MTUNZ 시그널링 서버 주소를 입력하세요.','잘못된 주소입니다. 예: http://192.168.1.20:8787','다음 세션에 사용할 서버 주소를 저장했습니다.','룸 {code}에 참가했습니다.','작업을 완료할 수 없습니다: {error}','먼저 룸을 만들거나 참가하세요.',
@@ -332,7 +368,16 @@ class AppStrings {
       "파일 저장됨: {name}",
       "먼저 룸에 참가하고 기기에 연결하세요.",
       "선택한 파일을 읽을 수 없습니다.",
-      "파일이 100 MB 제한을 초과합니다. 더 작은 파일을 선택하세요."
+      "파일이 100 MB 제한을 초과합니다. 더 작은 파일을 선택하세요.",
+      "Wi-Fi / 이더넷 / USB",
+      "Wi-Fi, 유선 이더넷 또는 Android USB 테더링을 사용할 수 있습니다. Windows PC의 활성 IPv4 어댑터를 검색하고 휴대폰에서 접근 가능한 주소를 선택하세요.",
+      "어댑터 검색",
+      "이 주소 사용",
+      "활성 IPv4 주소를 찾지 못했습니다. Wi-Fi, 이더넷 또는 USB 테더링에 연결한 뒤 다시 검색하세요.",
+      "Wi-Fi",
+      "이더넷 / USB 테더링",
+      "기타 네트워크",
+      "Windows에서 활성 어댑터를 검색하고 PC의 IPv4 주소를 선택한 뒤 포트 8787과 함께 입력하세요. USB 테더링을 사용하면 Windows에 RNDIS/USB 네트워크 어댑터가 표시됩니다."
     ],
     'es': [
       'Sin conexión','Esperando dispositivos','Sala unida','{count} dispositivo(s) conectado(s)',
@@ -351,7 +396,7 @@ class AppStrings {
       'IDIOMA DE LA APLICACIÓN','Elige el idioma de toda la interfaz de MTUNZ. El cambio es inmediato.','Idioma de visualización','Idioma actualizado',
       'MTUNZ CORE / SIGNALING','El servidor gestiona la señalización; el vídeo se transmite entre pares.','Dirección del servidor de señalización','Guardar dirección','En Android, introduce la IP LAN del PC que ejecuta MTUNZ Signaling Server (por ejemplo, http://192.168.1.20:8787), no 127.0.0.1. En el PC local puedes usar http://127.0.0.1:8787. Para Internet se necesitan HTTPS y TURN.',
       'PERMISOS DE CONTROL EN ANDROID','Activa el acceso remoto solo si entiendes el permiso.','Android requiere que el propietario active MTUNZ en Accesibilidad para recibir toques remotos. Cada solicitud de control debe aprobarse en el teléfono.','Abrir ajustes de Accesibilidad',
-      'INFORMACIÓN DE VERSIÓN','Versión inicial de desarrollo','0.3.0-dev  ·  Desarrollo nativo',
+      'INFORMACIÓN DE VERSIÓN','Versión inicial de desarrollo','0.3.1-dev  ·  Desarrollo nativo',
       'Sala MTUNZ creada','Introduce ambos códigos en el otro dispositivo. Compártelos solo con alguien de confianza.','CÓDIGO DE SALA','PIN DE INVITACIÓN','La sala caduca en {minutes} minutos.','Cerrar',
       'Conectar un dispositivo','Código de sala de 8 caracteres','PIN de 6 dígitos','Cancelar','Conectar','El código debe tener 8 caracteres y el PIN 6 dígitos.',
       'Primero introduce la dirección de MTUNZ Signaling Server en Ajustes.','Dirección no válida. Ejemplo: http://192.168.1.20:8787','Dirección guardada para la próxima sesión.','Te has unido a la sala {code}.','No se pudo completar la acción: {error}','Primero crea una sala o únete a una.',
@@ -392,7 +437,16 @@ class AppStrings {
       "Archivo guardado: {name}",
       "Únete a una sala y conecta un dispositivo primero.",
       "No se pudo leer el archivo seleccionado.",
-      "El archivo supera el límite de 100 MB. Elige uno más pequeño."
+      "El archivo supera el límite de 100 MB. Elige uno más pequeño.",
+      "WI-FI / ETHERNET / USB",
+      "Usa Wi-Fi, Ethernet o anclaje USB de Android. Busca los adaptadores IPv4 activos del PC Windows y elige la dirección a la que pueda acceder el teléfono.",
+      "Buscar adaptadores",
+      "Usar dirección",
+      "No se encontró una dirección IPv4 activa. Conecta Wi-Fi, Ethernet o anclaje USB y vuelve a buscar.",
+      "Wi-Fi",
+      "Ethernet / anclaje USB",
+      "Otra red",
+      "En Windows, busca los adaptadores activos y selecciona la IPv4 del PC. Introduce esa dirección con el puerto 8787. Con el anclaje USB, Windows debe mostrar un adaptador de red RNDIS/USB."
     ],
   };
 
