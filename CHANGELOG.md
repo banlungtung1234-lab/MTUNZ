@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1-dev — 2026-11-10
+
+- Replace the three-field join dialog with one self-contained MTUNZ invitation code. It carries the signaling URL and existing room credentials; no PIN or host address is entered separately.
+- Allow the host to use a configured HTTPS signaling service for cross-Internet rooms while retaining the embedded Core as the LAN/VPN default.
+- Generate one-code invitations for each detected LAN, Ethernet, USB-tether or VPN adapter; detect ZeroTier, Tailscale, WireGuard, OpenVPN, NetBird and common tunnel interfaces.
+- Add strict invite-envelope validation, private-network-only HTTP handling and unit/widget regression tests. Public signaling hostnames must use HTTPS.
+- Preserve server-side room PIN validation and per-peer tokens; the complete invite is a bearer credential and must be kept private.
+- Bump the application to 0.4.1+8.
+
 ## 0.4.0-dev — 2026-11-10
 
 - Introduce MTUNZ Unified Core: embed the Dart signaling service inside the same Flutter application process on Windows and Android.

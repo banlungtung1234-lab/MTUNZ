@@ -1,7 +1,7 @@
 name: mtunz
 description: MTUNZ cross-device remote connection and control app.
 publish_to: 'none'
-version: 0.4.0+7
+version: 0.4.1+8
 environment:
   sdk: '>=3.5.0 <4.0.0'
   flutter: '>=3.32.0'

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-enum NetworkLinkKind { wifi, wired, other }
+enum NetworkLinkKind { wifi, wired, vpn, other }
 
 class NetworkEndpoint {
   const NetworkEndpoint({
@@ -17,6 +17,19 @@ class NetworkEndpoint {
 class NetworkInterfaceDiscovery {
   static NetworkLinkKind classify(String interfaceName) {
     final name = interfaceName.toLowerCase();
+    if (name.contains('tailscale') ||
+        name.contains('zerotier') ||
+        name.contains('zero-tier') ||
+        name.contains('wireguard') ||
+        name.contains('openvpn') ||
+        name.contains('netbird') ||
+        name.contains('hamachi') ||
+        name == 'wg0' ||
+        name.startsWith('wg') ||
+        name.startsWith('tun') ||
+        name.startsWith('tap')) {
+      return NetworkLinkKind.vpn;
+    }
     if (name.contains('wifi') ||
         name.contains('wi-fi') ||
         name.contains('wireless') ||
@@ -79,12 +92,14 @@ class NetworkInterfaceDiscovery {
     endpoints.sort((a, b) {
       int rank(NetworkLinkKind kind) {
         switch (kind) {
-          case NetworkLinkKind.wired:
+          case NetworkLinkKind.vpn:
             return 0;
-          case NetworkLinkKind.wifi:
+          case NetworkLinkKind.wired:
             return 1;
-          case NetworkLinkKind.other:
+          case NetworkLinkKind.wifi:
             return 2;
+          case NetworkLinkKind.other:
+            return 3;
         }
       }
       final byKind = rank(a.kind).compareTo(rank(b.kind));

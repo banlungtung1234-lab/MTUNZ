@@ -12,6 +12,7 @@ import 'l10n/app_strings.dart';
 
 import 'services/platform_controller.dart';
 import 'services/embedded_signaling_server.dart';
+import 'services/invitation_code.dart';
 import 'services/file_transfer_protocol.dart';
 import 'services/rtc_mesh.dart';
 import 'services/signaling_client.dart';
@@ -124,7 +125,6 @@ class _HomeShellState extends State<HomeShell> {
   final _serverController = TextEditingController();
   final EmbeddedSignalingServer _embeddedCore = EmbeddedSignalingServer();
   final _codeController = TextEditingController();
-  final _pinController = TextEditingController();
   int _selectedIndex = 0;
   String _serverUrl = '';
   bool _coreStarting = false;
@@ -212,36 +212,37 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     _serverController.dispose();
     _codeController.dispose();
-    _pinController.dispose();
     unawaited(_disconnect().catchError((_) {}));
     unawaited(_embeddedCore.close());
     super.dispose();
   }
 
   Future<void> _createRoom() async {
-    // Creating a room always makes this device the host. If the user had
-    // joined another device's room earlier, do not accidentally create a new
-    // room on that remote Core using its stale URL.
-    if (!_embeddedCore.isRunning) {
-      await _startEmbeddedCore();
-    }
-    if (!_embeddedCore.isRunning) {
-      _showSnack('Không thể khởi động MTUNZ Core: ${_coreError ?? 'không rõ nguyên nhân'}');
+    // Embedded Core remains the LAN/VPN default. A custom HTTPS signaling
+    // service configured in Settings is used for cross-Internet rooms.
+    if (_usesEmbeddedCore) {
+      if (!_embeddedCore.isRunning) await _startEmbeddedCore();
+      if (!_embeddedCore.isRunning) {
+        _showSnack('Không thể khởi động MTUNZ Core: ${_coreError ?? 'không rõ nguyên nhân'}');
+        return;
+      }
+      final localUrl = _embeddedCore.localUri.toString();
+      if (mounted) {
+        setState(() {
+          _serverUrl = localUrl;
+          _serverController.text = localUrl;
+          _usesEmbeddedCore = true;
+        });
+      }
+    } else if (!_ensureServerConfigured()) {
       return;
     }
-    final localUrl = _embeddedCore.localUri.toString();
-    if (mounted) {
-      setState(() {
-        _serverUrl = localUrl;
-        _serverController.text = localUrl;
-        _usesEmbeddedCore = true;
-      });
-    }
-    if (!_ensureServerConfigured()) return;
+    final hostServerUrl = _serverUrl;
+    final hostingOnEmbeddedCore = _usesEmbeddedCore;
     await _withBusy(() async {
-      await SignalingClient.checkHealth(_serverUrl);
+      await SignalingClient.checkHealth(hostServerUrl);
       await _disconnect();
-      final client = _newClient();
+      final client = _newClient(serverUrl: hostServerUrl);
       var attached = false;
       try {
         final invite = await client.createRoom();
@@ -254,13 +255,14 @@ class _HomeShellState extends State<HomeShell> {
         attached = true;
         setState(() {
           _roomCode = invite.code;
+          // Keep the host marker, but never show the PIN separately.
           _roomPin = invite.pin;
           _statusKey = 'status_waiting';
           _notice = 'notice_room_ready';
           _noticeIsKey = true;
         });
-        await _scanNetworkInterfaces();
-        _showInvite(invite);
+        if (hostingOnEmbeddedCore) await _scanNetworkInterfaces();
+        _showInvite(invite, serverUrl: hostServerUrl, embeddedCore: hostingOnEmbeddedCore);
       } catch (_) {
         if (!attached) await client.leave();
         rethrow;
@@ -268,28 +270,19 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
-  Future<void> _joinRoom() async {
-    if (!_ensureServerConfigured()) return;
-    final target = Uri.tryParse(_serverUrl);
+  Future<void> _joinRoom(InvitationPayload invitation) async {
+    final target = Uri.tryParse(invitation.serverUrl);
     if (target != null && _isThisDeviceAddress(target.host)) {
-      _showSnack(
-        'Địa chỉ này trỏ về chính thiết bị đang tham gia. Hãy nhập địa chỉ LAN trong lời mời của thiết bị tạo phòng, không dùng 127.0.0.1.',
-      );
-      return;
-    }
-    final code = _codeController.text.trim().toUpperCase();
-    final pin = _pinController.text.trim();
-    if (code.length != 8 || pin.length != 6) {
-      _showSnack(_t('join_format_error'));
+      _showSnack('Mã mời trỏ về chính thiết bị này. Hãy dùng mã được tạo trên thiết bị chủ và chọn đúng mạng.');
       return;
     }
     await _withBusy(() async {
-      await SignalingClient.checkHealth(_serverUrl);
+      await SignalingClient.checkHealth(invitation.serverUrl);
       await _disconnect();
-      final client = _newClient();
+      final client = _newClient(serverUrl: invitation.serverUrl);
       var attached = false;
       try {
-        final joined = await client.joinRoom(code, pin);
+        final joined = await client.joinRoom(invitation.roomCode, invitation.pin);
         if (!mounted) {
           await client.leave();
           return;
@@ -297,14 +290,14 @@ class _HomeShellState extends State<HomeShell> {
         _attach(client, joined);
         attached = true;
         setState(() {
-          _roomCode = code;
+          _roomCode = invitation.roomCode;
           _roomPin = null;
           _statusKey = 'status_joined';
           _notice = 'notice_signaling_connected';
           _noticeIsKey = true;
           _selectedIndex = 2;
         });
-        _showSnack(_t('join_success', {'code': code}));
+        _showSnack(_t('join_success', {'code': invitation.roomCode}));
       } catch (_) {
         if (!attached) await client.leave();
         rethrow;
@@ -312,8 +305,8 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
-  SignalingClient _newClient() => SignalingClient(
-        serverUrl: _serverUrl,
+  SignalingClient _newClient({String? serverUrl}) => SignalingClient(
+        serverUrl: serverUrl ?? _serverUrl,
         deviceName: Platform.isAndroid ? 'MTUNZ Android' : 'MTUNZ Windows',
       );
 
@@ -563,56 +556,64 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  void _showInvite(RoomInvite invite) {
-    final endpoints = _usesEmbeddedCore
-        ? _networkEndpoints.take(6).toList(growable: false)
-        : const <NetworkEndpoint>[];
+  void _showInvite(
+    RoomInvite invite, {
+    required String serverUrl,
+    required bool embeddedCore,
+  }) {
+    final targets = <Map<String, String>>[];
+    if (embeddedCore) {
+      for (final endpoint in _networkEndpoints.take(8)) {
+        final url = 'http://${endpoint.address}:${_embeddedCore.port}';
+        targets.add({
+          'label': '${_networkKindLabel(endpoint.kind)} · ${endpoint.interfaceName}',
+          'code': InvitationCode.encode(serverUrl: url, roomCode: invite.code, pin: invite.pin),
+        });
+      }
+    } else {
+      targets.add({
+        'label': 'Máy chủ signaling đã cấu hình',
+        'code': InvitationCode.encode(serverUrl: serverUrl, roomCode: invite.code, pin: invite.pin),
+      });
+    }
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(_t('room_created')),
         content: SizedBox(
-          width: 440,
+          width: 460,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_t('invite_instructions')),
-                const SizedBox(height: 18),
-                _CodeTile(label: _t('room_code'), value: invite.code),
-                const SizedBox(height: 10),
-                _CodeTile(label: _t('invite_pin'), value: invite.pin),
-                const SizedBox(height: 10),
+                const Text(
+                  'Chỉ cần gửi MỘT mã bên dưới cho thiết bị còn lại. Mã đã chứa địa chỉ kết nối và thông tin xác thực; bên nhận không cần nhập URL hoặc PIN riêng.',
+                  style: TextStyle(color: Color(0xFFB7C8DC), fontSize: 11, height: 1.45),
+                ),
+                const SizedBox(height: 12),
                 Text(
                   _t('room_expires', {'minutes': '${invite.expiresInSeconds ~/ 60}'}),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60),
                 ),
-                const SizedBox(height: 18),
-                const Divider(color: Color(0xFF293A55)),
-                const SizedBox(height: 8),
-                const Text(
-                  'ĐỊA CHỈ CORE ĐỂ THIẾT BỊ KHÁC KẾT NỐI',
-                  style: TextStyle(color: Color(0xFF67DDEC), fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 6),
-                if (!_usesEmbeddedCore)
-                  _copyEndpointTile(_serverUrl, 'Máy chủ ghép nối đã cấu hình')
-                else if (endpoints.isEmpty)
+                const SizedBox(height: 14),
+                if (targets.isEmpty)
                   const Text(
-                    'Không tìm thấy IPv4 LAN. Hãy bật Wi-Fi, Ethernet hoặc USB tethering rồi thử quét lại.',
-                    style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 11),
+                    'Không tìm thấy địa chỉ mạng đang hoạt động. Hãy bật Wi-Fi, Ethernet hoặc VPN rồi quét adapter mạng trong Cài đặt.',
+                    style: TextStyle(color: Color(0xFFFFB36B), fontSize: 11, height: 1.4),
                   )
-                else
-                  for (final endpoint in endpoints)
-                    _copyEndpointTile(
-                      'http://${endpoint.address}:${_embeddedCore.port}',
-                      '${_networkKindLabel(endpoint.kind)} · ${endpoint.interfaceName}',
-                    ),
+                else ...[
+                  const Text(
+                    'CHỌN MÃ THEO ĐƯỜNG KẾT NỐI CỦA THIẾT BỊ NHẬN',
+                    style: TextStyle(color: Color(0xFF67DDEC), fontSize: 10, letterSpacing: 1.1, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  for (final target in targets) _inviteCodeTile(target['code']!, target['label']!),
+                ],
                 const SizedBox(height: 8),
                 const Text(
-                  'Thiết bị còn lại cần nhập một địa chỉ ở trên trong hộp thoại tham gia phòng. Không dùng 127.0.0.1 trên thiết bị khác.',
-                  style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 10, height: 1.4),
+                  'Nếu hai thiết bị khác mạng Wi-Fi nhưng cùng VPN (ZeroTier/Tailscale/WireGuard), hãy sao chép mã có nhãn VPN. Với Internet thông thường, cấu hình máy chủ HTTPS/TURN trong Cài đặt trước khi tạo phòng. Ai có mã mời đều có thể tham gia trong thời hạn của phòng, vì vậy hãy giữ bí mật.',
+                  style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 10, height: 1.45),
                 ),
               ],
             ),
@@ -623,9 +624,9 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  Widget _copyEndpointTile(String url, String label) => Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+  Widget _inviteCodeTile(String code, String label) => Container(
+        margin: const EdgeInsets.only(top: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           color: const Color(0xFF0C1728),
           borderRadius: BorderRadius.circular(10),
@@ -633,23 +634,24 @@ class _HomeShellState extends State<HomeShell> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.lan_rounded, size: 17, color: Color(0xFF55DDF2)),
+            const Icon(Icons.key_rounded, size: 17, color: Color(0xFF55DDF2)),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label, style: const TextStyle(color: Color(0xFF8FA1B9), fontSize: 9)),
-                  SelectableText(url, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  SelectableText(code, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: .3)),
                 ],
               ),
             ),
             IconButton(
-              tooltip: 'Sao chép địa chỉ',
+              tooltip: 'Sao chép mã mời',
               visualDensity: VisualDensity.compact,
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: url));
-                _showSnack('Đã sao chép địa chỉ Core.');
+                Clipboard.setData(ClipboardData(text: code));
+                _showSnack('Đã sao chép mã mời MTUNZ.');
               },
               icon: const Icon(Icons.copy_rounded, size: 16),
             ),
@@ -664,52 +666,54 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _showJoinDialog() async {
     _codeController.clear();
-    _pinController.clear();
-    // The joining device must enter the HOST's Core address, not its own
-    // loopback URL. Leave this blank for embedded-Core pairing so it is not
-    // mistaken for the remote host address.
-    if (_usesEmbeddedCore) {
-      _serverController.clear();
-    } else {
-      _serverController.text = _serverUrl;
-    }
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(_t('join_device_title')),
         content: SizedBox(
-          width: 400,
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: _serverController,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'Địa chỉ Core của thiết bị tạo phòng',
-                  hintText: 'http://192.168.1.20:8787',
-                ),
+              const Text(
+                'Dán mã mời MTUNZ do thiết bị tạo phòng gửi cho bạn. Ứng dụng tự nhận địa chỉ máy chủ, mã phòng và PIN từ mã này.',
+                style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 11, height: 1.45),
               ),
-              const SizedBox(height: 10),
-              TextField(controller: _codeController, textCapitalization: TextCapitalization.characters, maxLength: 8, decoration: InputDecoration(labelText: _t('room_code'), hintText: _t('room_code_hint'))),
-              const SizedBox(height: 10),
-              TextField(controller: _pinController, keyboardType: TextInputType.number, maxLength: 6, decoration: InputDecoration(labelText: _t('invite_pin'), hintText: _t('pin_hint'))),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _codeController,
+                textCapitalization: TextCapitalization.characters,
+                maxLength: 512,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Mã mời MTUNZ',
+                  hintText: 'MTZ1-…',
+                  alignLabelWithHint: true,
+                  helperText: 'Chỉ cần một mã duy nhất',
+                ),
+                onSubmitted: (_) => _submitInvitationCode(),
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(_t('cancel'))),
-          FilledButton(
-            onPressed: () {
-              if (!_saveServer(showNotice: false)) return;
-              Navigator.pop(context);
-              unawaited(_joinRoom());
-            },
-            child: Text(_t('connect')),
-          ),
+          FilledButton(onPressed: _submitInvitationCode, child: Text(_t('connect'))),
         ],
       ),
     );
+  }
+
+  void _submitInvitationCode() {
+    late final InvitationPayload invitation;
+    try {
+      invitation = InvitationCode.decode(_codeController.text);
+    } on FormatException catch (error) {
+      _showSnack(error.message.toString());
+      return;
+    }
+    Navigator.of(context).pop();
+    unawaited(_joinRoom(invitation));
   }
 
   bool _ensureServerConfigured() {
@@ -755,6 +759,8 @@ class _HomeShellState extends State<HomeShell> {
 
   String _networkKindLabel(NetworkLinkKind kind) {
     switch (kind) {
+      case NetworkLinkKind.vpn:
+        return 'VPN / ZeroTier / Tailscale';
       case NetworkLinkKind.wifi:
         return _t('network_type_wifi');
       case NetworkLinkKind.wired:
@@ -1034,7 +1040,24 @@ class _HomeShellState extends State<HomeShell> {
           Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_t('session_title'), style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800)), const SizedBox(height: 7), Text(_t('session_subtitle'), style: const TextStyle(color: Color(0xFF91A0B7), fontSize: 12))])), if (_roomCode != null) OutlinedButton.icon(onPressed: _disconnect, icon: const Icon(Icons.call_end_rounded, size: 16), label: Text(_t('disconnect')))]),
           const SizedBox(height: 20),
           if (_roomCode == null) _panel(title: _t('no_session'), subtitle: _t('create_or_join'), child: Wrap(spacing: 10, children: [FilledButton(onPressed: _createRoom, child: Text(_t('create_room'))), OutlinedButton(onPressed: _showJoinDialog, child: Text(_t('join_room')))])) else ...[
-            _panel(title: _t('room_code_title'), subtitle: _roomPin == null ? _t('joined_room') : _t('share_codes'), child: Row(children: [Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))), const Spacer(), if (_roomPin != null) Text('PIN $_roomPin', style: const TextStyle(color: Color(0xFFC3B7FF), fontWeight: FontWeight.w800))])),
+            _panel(
+              title: _t('room_code_title'),
+              subtitle: _roomPin == null ? _t('joined_room') : 'Chia sẻ mã mời đầy đủ trong cửa sổ tạo phòng',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_roomCode!, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 3, color: Color(0xFF57E0F4))),
+                  if (_roomPin != null)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 5),
+                      child: Text(
+                        'Đây là mã phòng nội bộ. Không chia sẻ PIN riêng; hãy dùng mã mời MTUNZ đầy đủ.',
+                        style: TextStyle(color: Color(0xFF9AAAC0), fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             Wrap(spacing: 10, runSpacing: 10, children: [FilledButton.icon(onPressed: _sharing ? _stopShare : _startShare, icon: Icon(_sharing ? Icons.stop_circle_outlined : Icons.screen_share_outlined), label: Text(_sharing ? _t('stop_sharing') : _t('share_this_device'))), OutlinedButton.icon(onPressed: _showJoinDialog, icon: const Icon(Icons.person_add_alt_1_rounded), label: Text(_t('add_another_device')))]),
             const SizedBox(height: 16),
@@ -1279,7 +1302,7 @@ class _HomeShellState extends State<HomeShell> {
                 FilledButton(onPressed: _saveServer, child: Text(_t('save_address'))),
                 const SizedBox(height: 8),
                 const Text(
-                  'Core được tích hợp và tự khởi động cùng MTUNZ. Khi tạo phòng, hãy gửi địa chỉ LAN hiển thị trong mã mời cho thiết bị còn lại. Để kết nối qua Internet khác mạng, cần máy chủ HTTPS/TURN bên ngoài.',
+                  'Core được tích hợp và tự khởi động cùng MTUNZ. Để dùng LAN/VPN, giữ địa chỉ Core nội bộ. Để kết nối qua Internet khác mạng, nhập URL máy chủ signaling HTTPS đã triển khai kèm TURN tại đây rồi lưu một lần. Khi tạo phòng, mã mời sẽ tự chứa URL đó; thiết bị nhận chỉ cần nhập một mã.',
                   style: TextStyle(color: Color(0xFF8698B0), fontSize: 10, height: 1.5),
                 ),
               ],
@@ -1321,11 +1344,13 @@ class _HomeShellState extends State<HomeShell> {
                     child: Row(
                       children: [
                         Icon(
-                          endpoint.kind == NetworkLinkKind.wired
-                              ? Icons.cable_rounded
-                              : endpoint.kind == NetworkLinkKind.wifi
-                                  ? Icons.wifi_rounded
-                                  : Icons.lan_rounded,
+                          endpoint.kind == NetworkLinkKind.vpn
+                              ? Icons.vpn_key_rounded
+                              : endpoint.kind == NetworkLinkKind.wired
+                                  ? Icons.cable_rounded
+                                  : endpoint.kind == NetworkLinkKind.wifi
+                                      ? Icons.wifi_rounded
+                                      : Icons.lan_rounded,
                           color: const Color(0xFF55DDF2),
                           size: 19,
                         ),

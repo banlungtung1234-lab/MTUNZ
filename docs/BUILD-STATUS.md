@@ -1,4 +1,4 @@
-# MTUNZ Unified Core 0.4.0-dev — build and validation status
+# MTUNZ Unified Core 0.4.1-dev — build and validation status
 
 ## Current development branch
 
@@ -22,24 +22,28 @@
 
 ## CI validation — 2026-11-10
 
-Latest inspected workflow: [run #80](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42673964480), source commit `24bd8c5f72272db10fcc7c6dee4409b8bd487533`.
+Latest complete validation: [run #81](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42772094646), source commit `9d25a8e4fc1bbad2d5db942106a1c7075f71332c`.
 
-The GitHub job API exposed the following results:
+All five validation jobs completed successfully:
 
-| Job returned by run #80 | Result | Checks |
-|---|---|---|
-| Build Android APK | **Success** | Flutter analysis, Flutter tests and release APK build |
-| Build Windows application (windows-2022) | **Success** | Flutter analysis, Flutter tests, Windows release build and ZIP packaging |
-| Build Windows signaling server | **Success** | Go race tests, `go vet` and Windows amd64 cross-build |
-| Publish MTUNZ release assets | **Skipped** | Expected for a pull-request run; this job only runs for tags |
+| Job | Result |
+|---|---|
+| Android Flutter analysis + tests + release APK | Success |
+| Windows 2022 analysis + tests + release build + ZIP | Success |
+| Current Windows runner analysis + tests + release build + ZIP | Success |
+| Go signaling tests/race/vet + Windows cross-build | Success |
+| Linux remote deployment: Docker Compose, Caddy and container build | Success |
 
-**Important aggregate-status discrepancy:** GitHub reports the overall workflow conclusion as `failure`, although the API returned three successful build jobs and one skipped release job, with no failed job or failing step exposed. The API also rejected the request to rerun this workflow. Therefore this run is evidence that the three returned build pipelines passed, but it is **not** recorded as a clean all-jobs green workflow. The branch workflow file also defines a second Windows runner and a remote-deployment validation job; neither appeared in the returned job list for run #80, so those checks are still unverified.
+The release-publication job was skipped as expected because this was a pull-request run, not a tag release. Run #81 completed with an overall success conclusion.
 
-The current 0.4.0-dev binaries were assembled from the successful artifacts of run #80 and independently checked for ZIP integrity and SHA-256. They are development artifacts, not a stable release.
+## 0.4.1-dev — one-code invitations and network paths
 
-## Known CI issue already addressed
-
-An earlier run reported widget tests timing out at `pumpAndSettle`. The new Core startup asynchronously scanned network interfaces while Settings remained mounted inside an `IndexedStack`; an indeterminate spinner on the hidden page prevented tests from settling. The scan indicator is now static while scanning, and the Android plus Windows 2022 Flutter test steps in run #80 passed.
+- Replace the three-field join dialog with one `MTZ1-` invitation code. The token includes the signaling URL and existing room credentials; the PIN remains validated by the server and is not shown separately.
+- Create one invite code per detected Wi-Fi/LAN, Ethernet, USB-tether or VPN adapter, so the sender selects the route the receiving device can actually reach.
+- Detect ZeroTier, Tailscale, WireGuard, OpenVPN, NetBird and common tunnel adapters.
+- Preserve embedded Core for local/VPN routes. A host can configure an external HTTPS signaling service once in Settings to create cross-Internet invites; the guest needs only the generated code.
+- Use the existing Go signaling + coturn REST credentials when a public HTTPS/TURN deployment is configured. This repository contains a VPS template, not a hosted public service.
+- The envelope is base64url-encoded, not encrypted. It is a bearer invitation and must be shared privately.
 
 ## Limitations — not yet certified as stable
 

@@ -28,6 +28,19 @@ void main() {
     expect(find.textContaining('100 MB'), findsOneWidget);
   });
 
+  testWidgets('joining a room asks for one complete invitation code', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Phiên điều khiển').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nhập mã phòng'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mã mời MTUNZ'), findsOneWidget);
+    expect(find.text('Địa chỉ Core của thiết bị tạo phòng'), findsNothing);
+    expect(find.text('PIN'), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
   testWidgets('Settings includes wired network setup guidance', (tester) async {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();

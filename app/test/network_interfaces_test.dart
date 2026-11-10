@@ -17,6 +17,14 @@ void main() {
     expect(NetworkInterfaceDiscovery.isThisDeviceAddress('192.168.1.21', endpoints), isFalse);
   });
 
+  test('recognizes VPN overlay adapters', () {
+    expect(NetworkInterfaceDiscovery.classify('Tailscale'), NetworkLinkKind.vpn);
+    expect(NetworkInterfaceDiscovery.classify('ZeroTier One'), NetworkLinkKind.vpn);
+    expect(NetworkInterfaceDiscovery.classify('wg0'), NetworkLinkKind.vpn);
+    expect(NetworkInterfaceDiscovery.classify('tun0'), NetworkLinkKind.vpn);
+    expect(NetworkInterfaceDiscovery.classify('tap-windows'), NetworkLinkKind.vpn);
+  });
+
   test('recognizes Wi-Fi, Ethernet and USB tether interfaces', () {
     expect(NetworkInterfaceDiscovery.classify('Wi-Fi'), NetworkLinkKind.wifi);
     expect(NetworkInterfaceDiscovery.classify('wlan0'), NetworkLinkKind.wifi);
