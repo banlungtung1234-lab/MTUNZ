@@ -1425,17 +1425,3 @@ class _HomeShellState extends State<HomeShell> {
         ],
       );
 }
-
-class _CodeTile extends StatelessWidget {
-  const _CodeTile({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(color: const Color(0xFF0B1422), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF263951))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Color(0xFF7F95AE), fontSize: 9, letterSpacing: 1.4)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 22, letterSpacing: 3, fontWeight: FontWeight.w900, color: Color(0xFF5BE2F5)))]),
-      );
-}

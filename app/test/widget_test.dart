@@ -33,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Phiên điều khiển').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Nhập mã phòng'));
+    await tester.tap(find.text('Tham gia phòng'));
     await tester.pumpAndSettle();
     expect(find.text('Mã mời MTUNZ'), findsOneWidget);
     expect(find.text('Địa chỉ Core của thiết bị tạo phòng'), findsNothing);
