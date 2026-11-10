@@ -63,6 +63,8 @@ void main() {
     final serverField = find.byType(TextField);
     expect(serverField, findsOneWidget);
     await tester.enterText(serverField, 'https://signal.example.net');
+    await tester.ensureVisible(find.text('Lưu địa chỉ Core'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Lưu địa chỉ Core'));
     await tester.pumpAndSettle();
 
