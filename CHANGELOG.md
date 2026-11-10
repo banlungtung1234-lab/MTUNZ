@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.1-dev — 2026-11-10
+
+- Replace the three-field join dialog with one self-contained MTUNZ invitation code. It carries the signaling URL and existing room credentials; no PIN or host address is entered separately.
+- Allow the host to use a configured HTTPS signaling service for cross-Internet rooms while retaining the embedded Core as the LAN/VPN default.
+- Generate one-code invitations for each detected LAN, Ethernet, USB-tether or VPN adapter; detect ZeroTier, Tailscale, WireGuard, OpenVPN, NetBird and common tunnel interfaces.
+- Add strict invite-envelope validation, private-network-only HTTP handling and unit/widget regression tests. Public signaling hostnames must use HTTPS.
+- Preserve server-side room PIN validation and per-peer tokens; the complete invite is a bearer credential and must be kept private.
+- Bump the application to 0.4.1+8.
+
+## 0.4.0-dev — 2026-11-10
+
+- Introduce MTUNZ Unified Core: embed the Dart signaling service inside the same Flutter application process on Windows and Android.
+- Automatically start/stop the Core with the application; remove the need to launch a separate signaling EXE or terminal for local-network pairing.
+- Prefer TCP 8787, safely fall back to an ephemeral free port, and display the actual host Core port plus LAN IPv4 endpoints in room invitations.
+- Allow the joining device to enter the host Core URL, room code and PIN in a single dialog.
+- Add authenticated room lifecycle, bounded HTTP bodies/event queues, rate limiting, constant-time PIN/token comparisons, three-peer room limits, stale-peer cleanup and end-to-end Core tests.
+- Fix invitation lifetime cleanup so a newly-created empty room remains available until its 15-minute expiry.
+- Keep the optional Go signaling service and HTTPS/TURN deployment template for user-managed remote Internet use.
+- Preserve WebRTC streaming, remote-control consent and file-transfer functionality from the prior branch; physical-device acceptance remains outstanding.
+- Fix Create Room to always host on the local embedded Core after a device has previously joined a remote room, preventing new invitations from accidentally pointing back to another device.
+- Add a `/healthz` preflight before room creation/join, with actionable diagnostics for wrong URL, unreachable host, firewall blocks and timeouts.
+- Remove a hidden indeterminate network-scan spinner that caused Flutter widget tests to time out while Settings was retained inside an IndexedStack.
+- Add end-to-end SignalingClient tests for health probing, host/join, peer events, SDP signaling, leave and rejecting a wrong Core address.
+
+
+## 0.3.1-dev — 2026-11-09
+
+- Trust forwarded client IP headers only from the explicitly configured Caddy reverse-proxy address; prevent proxy-wide rate limiting and reject spoofed/ambiguous forwarding headers.
+
+- Raise Android minimum SDK from API 23 to API 24 to align with the Flutter 3.47 supported deployment baseline, and compile the Windows native runner against the Windows 10+ API baseline.
+- Expand Windows CI builds to two Windows runner images and preserve both artifacts for release validation.
+- Add Windows IPv4 adapter discovery for Wi-Fi, Ethernet and common Android RNDIS/USB tether network interfaces.
+- Add multiple STUN endpoints and optional coturn TURN REST credentials generated per peer with a short expiry; the TURN shared secret remains server-side.
+- Batch ICE candidates to reduce signaling POSTs and keep the Go signaling queue available under candidate bursts.
+- Add bounded WebRTC ICE restart and re-negotiation attempts after interrupted peer connections, with deterministic offer ownership to reduce collisions.
+- Increase WebRTC file payloads to 60 KiB while keeping the full frame below the common 64 KiB SCTP message limit; tune data-channel backpressure to a 4/2 MiB high/low watermark and reduce progress UI updates to 1 MiB intervals.
+- Keep one active incoming receive/save operation to protect mobile memory and reject over-size streaming sources before sending excess bytes.
+- Prefer the Gradle binary distribution download and reuse Gradle dependencies in CI.
+- Keep iOS/iPhone out of the current platform build and roadmap scope.
+
 ## 0.3.0-dev — 2026-11-09
 
 - Add peer-to-peer file sending and receiving over the existing WebRTC data channel; file contents are not uploaded to the signaling server.

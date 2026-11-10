@@ -1,66 +1,76 @@
-# MTUNZ 0.3.0-dev — build and validation status
+# MTUNZ Unified Core 0.4.1-dev — build and validation status
 
-## CI result: PASS
+## Current development branch
 
-- **Merged main commit:** `44dba08c68868ca723490ab28c7b1654f9ca7f9c`
-- **Feature PR:** [PR #3](https://github.com/banlungtung1234-lab/MTUNZ/pull/3) — merged on 2026-11-09.
-- **PR validation:** [run 42573294364](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42573294364) — success.
-- **Post-merge main validation:** [run 42574039126](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42574039126) — success; Android, Windows desktop and Windows signaling jobs completed successfully.
-- **Flutter:** 3.47.9 stable
-- **Go:** 1.27.3
-- **App version:** 0.3.0+5
+- **Feature PR:** [PR #5](https://github.com/banlungtung1234-lab/MTUNZ/pull/5) — open, not merged into `main`.
+- **Branch:** `feature/unified-core-0.4`.
+- **Target platforms:** Windows 10/11 x64 and Android API 24+. iOS/iPhone is excluded.
+- **Application architecture:** one shared Flutter/Dart application codebase. Windows and Android still have different native packages, but both include the same embedded signaling Core. Normal local-network pairing does not require a separate server EXE or terminal.
 
-The successful post-merge workflow was run against the exact commit now at the tip of `main`.
+## 0.4.0-dev changes in this branch
 
-## Build outputs
+- Embed the Dart signaling Core inside the Flutter process on both Windows and Android.
+- Bind to IPv4 interfaces, prefer port `8787`, and fall back to a free ephemeral port if the preferred port is already occupied.
+- Start and stop the Core with the app lifecycle; display the actual host port and LAN IPv4 addresses in the invitation.
+- Join dialog accepts the remote host Core URL, room code and PIN.
+- Creating a room always switches back to this device's embedded Core, even after the user has previously joined a room hosted by another device. This avoids accidentally creating another room on the previous remote host.
+- Before create/join, call `GET /healthz` on the selected Core. Surface actionable diagnostics for wrong addresses, TCP refusal, timeout and firewall/network problems before trying to join a room.
+- Add Core HTTP API limits: bounded body and queues, rate-limited room creation/join, three devices per room, per-peer bearer tokens, short room expiry, authenticated event polling and stale-peer cleanup.
+- Fix empty-room cleanup so newly created invitations survive until their 15-minute expiry.
+- Remove an indeterminate network-scan spinner from a hidden IndexedStack page. It previously prevented Flutter widget tests from settling.
+- Add integration tests using the actual `SignalingClient` against the embedded Core: health probe, create, host join, second-device join, peer-joined, SDP offer, peer-left and wrong-Core rejection.
 
-| Artifact | CI | Binary/container inspection |
-|---|---|---|
-| Android APK | PASS | Valid APK archive; contains arm64-v8a, armeabi-v7a and x86_64 native libraries |
-| Windows desktop | PASS | Valid ZIP; contains MTUNZ.exe, Flutter runtime, WebRTC DLL and app data |
-| Signaling server | PASS | Valid PE32+ Windows x86-64 executable |
+## CI validation — 2026-11-10
 
-The downloadable GitHub Actions artifacts are retained for 30 days from the workflow run. A consolidated `MTUNZ-0.3.0-dev-Install-Pack.zip` can be assembled from these artifacts for first-time installation.
+Latest complete validation: [run #81](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42772094646), source commit `9d25a8e4fc1bbad2d5db942106a1c7075f71332c`.
 
-## CI checks
+All five validation jobs completed successfully:
 
-- Android: `flutter analyze`, `flutter test`, `flutter build apk --release` — PASS.
-- Windows: `flutter analyze`, `flutter test`, `flutter build windows --release`, ZIP packaging — PASS.
-- Signaling server: `go test -race ./...`, `go vet ./...`, Windows x64 cross-compile — PASS.
+| Job | Result |
+|---|---|
+| Android Flutter analysis + tests + release APK | Success |
+| Windows 2022 analysis + tests + release build + ZIP | Success |
+| Current Windows runner analysis + tests + release build + ZIP | Success |
+| Go signaling tests/race/vet + Windows cross-build | Success |
+| Linux remote deployment: Docker Compose, Caddy and container build | Success |
 
-The new file-transfer unit tests and localized Files-page widget test passed on both Android and Windows CI jobs.
+The release-publication job was skipped as expected because this was a pull-request run, not a tag release. Run #81 completed with an overall success conclusion.
 
-## 0.3.0-dev file-transfer implementation
+## 0.4.1-dev — one-code invitations and network paths
 
-- Peer-to-peer file bytes travel over the existing WebRTC data channel, not through the signaling server.
-- The recipient must approve each incoming transfer and choose a save destination.
-- Data is framed in ordered 16 KB binary chunks with input validation, bounded data-channel buffering, transfer progress and cancellation.
-- Incoming file names are sanitized, including Windows-reserved names.
-- Per-file limit is 100 MB. The receiving device assembles the file in memory before opening the native save dialog.
-- File-transfer UI is translated into Vietnamese, English, Simplified Chinese, Japanese, Korean and Spanish.
+- Replace the three-field join dialog with one `MTZ1-` invitation code. The token includes the signaling URL and existing room credentials; the PIN remains validated by the server and is not shown separately.
+- Create one invite code per detected Wi-Fi/LAN, Ethernet, USB-tether or VPN adapter, so the sender selects the route the receiving device can actually reach.
+- Detect ZeroTier, Tailscale, WireGuard, OpenVPN, NetBird and common tunnel adapters.
+- Preserve embedded Core for local/VPN routes. A host can configure an external HTTPS signaling service once in Settings to create cross-Internet invites; the guest needs only the generated code.
+- Use the existing Go signaling + coturn REST credentials when a public HTTPS/TURN deployment is configured. This repository contains a VPS template, not a hosted public service.
+- The envelope is base64url-encoded, not encrypted. It is a bearer invitation and must be shared privately.
 
-## Still requires real-device validation
+## Limitations — not yet certified as stable
 
-CI proves static analysis, automated tests and native compilation; it does **not** prove reliable real-world Windows↔Android transfer. Test on a physical Windows PC and Android phone:
+1. **Physical device acceptance is outstanding.** CI cannot prove that Windows 10, Windows 11 and a real Android phone can reach one another across the user's Wi-Fi, Ethernet, RNDIS and router/firewall configuration.
+2. **A green /healthz probe proves only that the host HTTP Core is reachable.** It does not prove that WebRTC ICE can establish a media/data channel. Restrictive NATs may still require TURN.
+3. **Android hosting in the background is not guaranteed.** Keep MTUNZ open during a local-host session; Android can suspend background networking. A persistent foreground Core service is a future item.
+4. **Windows Firewall may block inbound TCP.** Allow MTUNZ only on trusted Private networks. Do not expose the embedded HTTP Core to the public Internet.
+5. **USB support is IP networking over Android USB tethering/RNDIS.** It is not raw USB or ADB.
+6. **File receiving still buffers the complete file in memory**, uses a 100 MiB cap and serializes incoming save operations.
+7. **Public Internet service is not bundled.** Cross-network Internet use requires user-managed HTTPS signaling and TURN infrastructure.
+8. Android is not production-signed with a stable release keystore; no Play Store release is prepared.
 
-- Send small files in both directions and compare the saved file size/hash.
-- Verify receiver accept/reject, destination selection, save cancellation and sender cancellation.
-- Interrupt Wi-Fi during transfer and confirm both sides recover without a stuck transfer.
-- Exercise files approaching 100 MB while monitoring memory use.
-- Test same-Wi-Fi and restrictive NAT/mobile-network paths.
+## Required device acceptance matrix
 
-## Current boundaries and safety limits
+Before treating 0.4.0 as stable, test on real Windows 10, Windows 11 and Android devices:
 
-- No TURN relay is bundled. Direct WebRTC may fail on restrictive NAT, carrier or office/school networks.
-- The signaling server uses HTTP for trusted-LAN development. Do not expose port 8787 directly to the public Internet; public deployment needs TLS and properly secured TURN.
-- Three devices maximum per room; multi-peer file transfer has not had physical-device soak testing.
-- The 100 MB file cap is a safeguard, not a promise of low memory use: the receiver buffers the complete file before saving.
-- Remote Android tap/swipe still requires the device owner to enable MTUNZ Accessibility and approve the request.
-- Keyboard injection, clipboard, audio, account login, persistent trusted devices and iOS are not implemented.
+- Windows host ↔ Android guest on Wi-Fi.
+- Android host ↔ Windows guest on Wi-Fi.
+- Ethernet host and Android guest on the same LAN.
+- Android USB tethering with the correct RNDIS adapter selected.
+- Core port 8787 occupied, verifying that the fallback port is shown correctly and is reachable through the firewall.
+- Screen sharing in both directions where supported.
+- Remote-control consent, reject and revoke.
+- File send both directions, accept/reject/cancel and verify SHA-256.
+- Network interruption, Core/app restart and rejoin.
+- Separate Internet networks with a real HTTPS/TURN deployment.
 
-## Build requirements
+## Release state
 
-- Flutter 3.47.9 stable (pinned in CI).
-- Android SDK and JDK 21 for APK builds.
-- Windows build host with Visual Studio 2022 and Desktop development with C++ for local Windows builds.
-- GitHub Actions rebuilds Android, Windows and signaling server artifacts when relevant source files change, or when manually dispatched.
+PR #5 remains a development change and is not merged into `main`. A CI pass is necessary but not sufficient for production release. The Windows 10/11 + Android physical-device acceptance matrix, memory-based file receive path, production signing and external NAT/TURN tests remain before a stable 1.0.0 release.

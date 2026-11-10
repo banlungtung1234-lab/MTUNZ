@@ -5,10 +5,12 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.github/workflows/**'
       - 'app/**'
       - 'platform/**'
       - 'server/**'
       - 'scripts/**'
+      - 'deploy/**'
   push:
     branches: [main]
     paths:
@@ -16,9 +18,14 @@ on:
       - 'platform/**'
       - 'server/**'
       - 'scripts/**'
+      - 'deploy/**'
 
 permissions:
   contents: read
+
+concurrency:
+  group: mtunz-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   android:
@@ -39,6 +46,42 @@ jobs:
         shell: bash
         run: ../scripts/prepare-flutter-project.sh
         working-directory: app
+      - name: Prefer an Asia-Pacific Maven Central mirror for Kotlin artifacts
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/mtunz-kotlin-maven-mirror.gradle" <<'GRADLEINIT'
+          // Keep Kotlin compiler/plugin artifacts off the GitHub Releases redirect
+          // path that has returned repeated HTTP 504 responses in CI.
+          // The regional mirror is first among Maven Central sources; standard sources remain as fallback.
+          gradle.beforeSettings { settings ->
+              // Adding a custom repository disables Gradle's implicit plugin portal.
+              // Keep the official plugin portal available for Flutter's Gradle plugins.
+              settings.pluginManagement.repositories.gradlePluginPortal()
+              settings.pluginManagement.repositories.google()
+              settings.dependencyResolutionManagement.repositories.google()
+              settings.pluginManagement.repositories.maven {
+                  name = 'MavenCentralAsiaMirror'
+                  url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
+                  content {
+                      includeGroupByRegex('org\\.jetbrains\\.kotlin(\\..*)?')
+                      includeGroupByRegex('org\\.jetbrains\\.kotlinx(\\..*)?')
+                  }
+              }
+              settings.dependencyResolutionManagement.repositories.maven {
+                  name = 'MavenCentralAsiaMirror'
+                  url = uri('https://maven-central-asia.storage-download.googleapis.com/maven2/')
+                  content {
+                      includeGroupByRegex('org\\.jetbrains\\.kotlin(\\..*)?')
+                      includeGroupByRegex('org\\.jetbrains\\.kotlinx(\\..*)?')
+                  }
+              }
+              settings.pluginManagement.repositories.mavenCentral()
+              settings.dependencyResolutionManagement.repositories.mavenCentral()
+          }
+          GRADLEINIT
+      - name: Cache Gradle distributions and dependencies
+        uses: gradle/actions/setup-gradle@v4
       - name: Analyze Dart code
         run: flutter analyze
         working-directory: app
@@ -56,8 +99,12 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Build Windows application
-    runs-on: windows-latest
+    name: Build Windows application (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2022, windows-latest]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -83,7 +130,7 @@ jobs:
         run: Compress-Archive -Path app/build/windows/x64/runner/Release/* -DestinationPath MTUNZ-Windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: MTUNZ-Windows-x64
+          name: MTUNZ-Windows-x64-${{ matrix.runner }}
           path: MTUNZ-Windows-x64.zip
           if-no-files-found: error
           retention-days: 30
@@ -129,8 +176,12 @@ jobs:
           path: release-assets/android
       - uses: actions/download-artifact@v4
         with:
-          name: MTUNZ-Windows-x64
-          path: release-assets/windows
+          name: MTUNZ-Windows-x64-windows-2022
+          path: release-assets/windows-2022
+      - uses: actions/download-artifact@v4
+        with:
+          name: MTUNZ-Windows-x64-windows-latest
+          path: release-assets/windows-latest
       - uses: actions/download-artifact@v4
         with:
           name: MTUNZ-Signaling-Windows
@@ -140,3 +191,15 @@ jobs:
         with:
           generate_release_notes: true
           files: release-assets/**/*
+
+  remote-deployment:
+    name: Validate Linux remote deployment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
+        run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
+      - name: Validate Caddy reverse-proxy configuration
+        run: docker run --rm --entrypoint caddy -e MTUNZ_DOMAIN=signal.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.9-alpine validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Build signaling server container
+        run: docker build --pull --file server/Dockerfile --tag mtunz-signaling:ci server

@@ -65,6 +65,7 @@ class RtcMesh {
     required this.onFileOffer,
     required this.onFileReceived,
     required this.onFileTransfersChanged,
+    this.iceServers = const [],
   }) {
     _subscription = signaling.events.listen(
       _queueSignalMessage,
@@ -75,6 +76,7 @@ class RtcMesh {
   }
 
   final SignalingClient signaling;
+  final List<Map<String, dynamic>> iceServers;
   final void Function(List<PeerView> peers) onChanged;
   final Future<void> Function(String peerId, String peerName) onControlRequest;
   final void Function(String message) onNotice;
@@ -85,6 +87,9 @@ class RtcMesh {
   final Map<String, _PeerLink> _links = {};
   final Map<String, _OutgoingFileTransfer> _outgoingTransfers = {};
   final Map<String, _IncomingFileTransfer> _incomingTransfers = {};
+  // Received files are assembled in memory; serialize receive/save operations
+  // so remote peers cannot each allocate up to 100 MB at the same time.
+  int _savingIncomingTransfers = 0;
   final Map<String, FileTransferView> _fileTransfers = {};
   final Map<String, Future<_PeerLink>> _linkCreations = {};
   final Map<String, String> _peerNames = {};
@@ -320,12 +325,16 @@ class RtcMesh {
 
       _updateFileTransfer(id, status: 'sending');
       var sentBytes = 0;
+      var lastProgressBytes = 0;
       var chunkIndex = 0;
       await for (final block in content) {
         for (var offset = 0; offset < block.length; offset += FileTransferProtocol.chunkBytes) {
           if (transfer.cancelled || _disposed) throw StateError('Truyền tệp đã bị hủy.');
           final end = math.min(offset + FileTransferProtocol.chunkBytes, block.length);
           final payload = Uint8List.sublistView(block, offset, end);
+          if (sentBytes + payload.length > size) {
+            throw StateError('Dữ liệu tệp đọc được lớn hơn kích thước đã khai báo.');
+          }
           final packet = FileTransferProtocol.encodeChunk(
             transferId: id,
             index: chunkIndex,
@@ -334,7 +343,8 @@ class RtcMesh {
           await _sendFilePacket(channel, packet, isCancelled: () => transfer.cancelled || _disposed);
           sentBytes += payload.length;
           chunkIndex++;
-          if (chunkIndex % 8 == 0 || sentBytes == size) {
+          if (sentBytes - lastProgressBytes >= 1024 * 1024 || sentBytes == size) {
+            lastProgressBytes = sentBytes;
             _updateFileTransfer(id, transferred: sentBytes);
           }
         }
@@ -353,13 +363,24 @@ class RtcMesh {
     }
   }
 
-  Future<void> _sendFilePacket(RTCDataChannel channel, Uint8List packet, {required bool Function() isCancelled}) async {
-    while (await channel.getBufferedAmount() > 512 * 1024) {
-      if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
-      if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
-        throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+  static const int _fileChannelHighWaterBytes = 4 * 1024 * 1024;
+  static const int _fileChannelLowWaterBytes = 2 * 1024 * 1024;
+
+  Future<void> _sendFilePacket(
+    RTCDataChannel channel,
+    Uint8List packet, {
+    required bool Function() isCancelled,
+  }) async {
+    var buffered = await channel.getBufferedAmount();
+    if (buffered >= _fileChannelHighWaterBytes) {
+      while (buffered > _fileChannelLowWaterBytes) {
+        if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
+        if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+          throw StateError('Kết nối đã đóng trong khi truyền tệp.');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        buffered = await channel.getBufferedAmount();
       }
-      await Future<void>.delayed(const Duration(milliseconds: 12));
     }
     if (isCancelled()) throw StateError('Truyền tệp đã bị hủy.');
     if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
@@ -397,7 +418,9 @@ class RtcMesh {
       _sendData(link, {'type': 'file-reject', 'transferId': id ?? ''});
       return;
     }
-    if (_incomingTransfers.values.any((transfer) => transfer.peerId == link.id)) {
+    // The receiver buffers the full file before saving. Serialize incoming
+    // receive/save operations globally to keep peak mobile memory bounded.
+    if (_incomingTransfers.isNotEmpty || _savingIncomingTransfers > 0) {
       _sendData(link, {'type': 'file-reject', 'transferId': id});
       return;
     }
@@ -476,14 +499,17 @@ class RtcMesh {
       _abortIncomingFile(link, transfer, 'Tệp nhận được chưa đầy đủ, vui lòng gửi lại.');
       return;
     }
-    _incomingTransfers.remove(transferId);
     _updateFileTransfer(transferId, status: 'saving');
     final bytes = transfer.builder.takeBytes();
+    _savingIncomingTransfers++;
     var saved = false;
     try {
       saved = await onFileReceived(transfer.peerName, transfer.fileName, bytes);
     } catch (error) {
       if (!_disposed) onNotice('Không lưu được tệp nhận: $error');
+    } finally {
+      _savingIncomingTransfers--;
+      _incomingTransfers.remove(transferId);
     }
     _sendData(link, {'type': 'file-saved', 'transferId': transferId, 'saved': saved});
     _updateFileTransfer(transferId, status: saved ? 'completed' : 'not_saved');
@@ -615,14 +641,23 @@ class RtcMesh {
     if (type == 'renegotiate-request') {
       final from = message['from'] as String?;
       if (_isValidPeerId(from) && signaling.peerId.compareTo(from!) < 0) {
-        await _makeOffer(from, force: true);
+        final link = await _ensureLink(from);
+        if (link.connection.signalingState == RTCSignalingState.RTCSignalingStateStable) {
+          await link.connection.restartIce();
+          await _makeOffer(from, force: true);
+        }
       }
       return;
     }
-    if (type != 'offer' && type != 'answer' && type != 'candidate') return;
+    if (type != 'offer' && type != 'answer' &&
+        type != 'candidate' && type != 'candidate-batch') {
+      return;
+    }
     final from = message['from'] as String?;
     final data = message['data'] as Map<String, dynamic>?;
-    if (!_isValidPeerId(from) || data == null) return;
+    if (!_isValidPeerId(from) || data == null) {
+      return;
+    }
     final link = await _ensureLink(from!);
     if (type == 'offer') {
       final sdp = data['sdp'] as String?;
@@ -640,15 +675,79 @@ class RtcMesh {
         link.remoteDescriptionSet = true;
         await _drainCandidates(link);
       }
+    } else if (type == 'candidate') {
+      await _addRemoteCandidate(link, data);
     } else {
-      final candidate = data['candidate'] as String?;
-      if (candidate != null) {
-        final ice = RTCIceCandidate(candidate, data['sdpMid'] as String?, data['sdpMLineIndex'] as int?);
-        if (link.remoteDescriptionSet) {
-          await link.connection.addCandidate(ice);
-        } else {
-          link.pendingCandidates.add(ice);
+      final candidates = data['candidates'];
+      if (candidates is List) {
+        for (final item in candidates) {
+          if (item is Map<String, dynamic>) {
+            await _addRemoteCandidate(link, item);
+          }
         }
+      }
+    }
+  }
+
+  Future<void> _addRemoteCandidate(_PeerLink link, Map<String, dynamic> data) async {
+    final candidate = data['candidate'] as String?;
+    if (candidate == null || candidate.isEmpty) return;
+    final rawIndex = data['sdpMLineIndex'];
+    final ice = RTCIceCandidate(
+      candidate,
+      data['sdpMid'] as String?,
+      rawIndex is num ? rawIndex.toInt() : null,
+    );
+    if (link.remoteDescriptionSet) {
+      await link.connection.addCandidate(ice);
+    } else {
+      link.pendingCandidates.add(ice);
+    }
+  }
+
+  void _queueLocalCandidate(_PeerLink link, Map<String, dynamic> candidate) {
+    if (_disposed || _links[link.id] != link) return;
+    link.pendingLocalCandidates.add(candidate);
+    if (link.pendingLocalCandidates.length >= 8) {
+      link.candidateBatchTimer?.cancel();
+      link.candidateBatchTimer = null;
+      unawaited(_flushLocalCandidates(link));
+    } else {
+      link.candidateBatchTimer ??= Timer(const Duration(milliseconds: 40), () {
+        link.candidateBatchTimer = null;
+        unawaited(_flushLocalCandidates(link));
+      });
+    }
+  }
+
+  Future<void> _flushLocalCandidates(_PeerLink link) async {
+    if (_disposed || _links[link.id] != link || link.flushingCandidates ||
+        link.pendingLocalCandidates.isEmpty) {
+      return;
+    }
+    link.flushingCandidates = true;
+    try {
+      while (!_disposed && _links[link.id] == link && link.pendingLocalCandidates.isNotEmpty) {
+        final count = math.min(8, link.pendingLocalCandidates.length);
+        final batch = link.pendingLocalCandidates.take(count).toList(growable: false);
+        link.pendingLocalCandidates.removeRange(0, count);
+        try {
+          await signaling.sendSignal(link.id, 'candidate-batch', {'candidates': batch});
+        } catch (_) {
+          link.pendingLocalCandidates.insertAll(0, batch);
+          rethrow;
+        }
+      }
+    } catch (error) {
+      if (!_disposed) onNotice('Không gửi được nhóm ICE candidate: $error');
+    } finally {
+      link.flushingCandidates = false;
+      if (!_disposed && _links[link.id] == link &&
+          link.pendingLocalCandidates.isNotEmpty && link.candidateBatchTimer == null) {
+        link.candidateBatchTimer = Timer(const Duration(milliseconds: 500), () {
+          link.candidateBatchTimer = null;
+          unawaited(_flushLocalCandidates(link));
+        });
       }
     }
   }
@@ -680,8 +779,11 @@ class RtcMesh {
 
       final configuration = <String, dynamic>{
         'sdpSemantics': 'unified-plan',
+        'iceCandidatePoolSize': 4,
         'iceServers': [
           {'urls': 'stun:stun.l.google.com:19302'},
+          {'urls': 'stun:stun.cloudflare.com:3478'},
+          ...iceServers,
         ],
       };
       connection = await createPeerConnection(configuration);
@@ -691,9 +793,7 @@ class RtcMesh {
       _links[peerId] = link;
       connection.onIceCandidate = (candidate) {
         if (candidate.candidate == null || _disposed || _links[peerId] != link) return;
-        signaling.sendSignal(peerId, 'candidate', candidate.toMap()).catchError((error) {
-          if (!_disposed) onNotice('Không gửi được ICE candidate: $error');
-        });
+        _queueLocalCandidate(link, candidate.toMap());
       };
       connection.onTrack = (event) {
         if (_disposed || _links[peerId] != link) return;
@@ -707,6 +807,22 @@ class RtcMesh {
       connection.onConnectionState = (state) {
         if (_disposed || _links[peerId] != link) return;
         link.state = state.toString().replaceFirst('RTCPeerConnectionState.', '');
+        final stateText = state.toString().toLowerCase();
+        final connected = stateText.endsWith('connected') && !stateText.contains('disconnected');
+        final interrupted = stateText.contains('disconnected') || stateText.endsWith('failed');
+        if (connected) {
+          link.recoveryTimer?.cancel();
+          link.recoveryTimer = null;
+          link.recoveryAttempts = 0;
+          link.recoveryNoticeShown = false;
+          link.recoveryExhausted = false;
+        } else if (interrupted && !link.recoveryExhausted) {
+          if (!link.recoveryNoticeShown) {
+            link.recoveryNoticeShown = true;
+            onNotice('Kết nối thiết bị đang gián đoạn; MTUNZ sẽ tự thử khôi phục.');
+          }
+          _scheduleIceRecovery(link);
+        }
         _notify();
       };
       connection.onDataChannel = (channel) {
@@ -733,6 +849,49 @@ class RtcMesh {
         await renderer.dispose();
       } catch (_) {}
       rethrow;
+    }
+  }
+
+  static const int _maxIceRecoveryAttempts = 3;
+
+  void _scheduleIceRecovery(_PeerLink link) {
+    if (_disposed || _links[link.id] != link || link.recoveryTimer != null ||
+        link.recoveryAttempts >= _maxIceRecoveryAttempts || link.recoveryExhausted) {
+      return;
+    }
+    final delay = switch (link.recoveryAttempts) {
+      0 => const Duration(seconds: 2),
+      1 => const Duration(seconds: 5),
+      _ => const Duration(seconds: 10),
+    };
+    link.recoveryTimer = Timer(delay, () {
+      link.recoveryTimer = null;
+      unawaited(_attemptIceRecovery(link));
+    });
+  }
+
+  Future<void> _attemptIceRecovery(_PeerLink link) async {
+    if (_disposed || _links[link.id] != link || link.recoveryExhausted) return;
+    link.recoveryAttempts++;
+    try {
+      // Only the lower peer ID creates offers, avoiding simultaneous offers.
+      if (signaling.peerId.compareTo(link.id) > 0) {
+        await signaling.sendSignal(link.id, 'renegotiate-request', const {});
+      } else if (link.connection.signalingState == RTCSignalingState.RTCSignalingStateStable) {
+        await link.connection.restartIce();
+        await _makeOffer(link.id, force: true);
+      }
+    } catch (error) {
+      if (!_disposed && _links[link.id] == link) {
+        onNotice('Thử khôi phục kết nối chưa thành công: $error');
+      }
+    }
+    if (_disposed || _links[link.id] != link) return;
+    if (link.recoveryAttempts < _maxIceRecoveryAttempts) {
+      _scheduleIceRecovery(link);
+    } else {
+      link.recoveryExhausted = true;
+      onNotice('Chưa thể khôi phục kết nối. Hãy kiểm tra mạng hoặc thử ghép nối lại thiết bị.');
     }
   }
 
@@ -883,6 +1042,9 @@ class RtcMesh {
     final link = _links.remove(peerId);
     _peerNames.remove(peerId);
     if (link == null) return;
+    link.recoveryTimer?.cancel();
+    link.candidateBatchTimer?.cancel();
+    link.pendingLocalCandidates.clear();
     try {
       await link.connection.close();
     } finally {
@@ -973,5 +1135,12 @@ class _PeerLink {
   bool remoteGrantedControl = false;
   bool remoteDescriptionSet = false;
   bool remoteSharing = false;
+  Timer? recoveryTimer;
+  Timer? candidateBatchTimer;
+  final List<Map<String, dynamic>> pendingLocalCandidates = [];
+  bool flushingCandidates = false;
+  int recoveryAttempts = 0;
+  bool recoveryNoticeShown = false;
+  bool recoveryExhausted = false;
   final List<RTCIceCandidate> pendingCandidates = [];
 }

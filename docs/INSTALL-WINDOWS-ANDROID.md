@@ -1,62 +1,82 @@
-# MTUNZ 0.3.0-dev — hướng dẫn cài Windows + Android
+# MTUNZ Unified Core 0.4.1-dev — hướng dẫn Windows 10/11 + Android
 
-## Gói cài đặt
+## Nền tảng hỗ trợ
 
-Gói thử nghiệm gồm ứng dụng Android APK, bộ ứng dụng Windows portable, MTUNZ Signaling Server và tệp khởi chạy máy chủ. Hai thiết bị nên kết nối cùng một mạng Wi-Fi trong lần thử đầu tiên.
+- **Windows:** Windows 10/11, bản x64.
+- **Android:** API 24 trở lên (Android 7.0+).
+- **iPhone/iOS:** không nằm trong phạm vi phiên bản này.
 
-## 1. Giải nén gói
+## Điểm khác biệt của Unified Core
 
-Giải nén toàn bộ `MTUNZ-0.3.0-dev-Install-Pack.zip` vào một thư mục trên PC. Giữ nguyên cấu trúc thư mục bên trong.
+MTUNZ 0.4.1 tích hợp Core ghép nối ngay bên trong ứng dụng Windows và Android. Khi dùng LAN/VPN, Core tự khởi động; không cần chạy `MTUNZ-Signaling-Windows.exe` hoặc mở `start-server.bat`. Lời mời được gói thành một mã duy nhất chứa địa chỉ kết nối, mã phòng và PIN.
 
-## 2. Chạy máy chủ trên Windows
+Core ưu tiên cổng TCP `8787`. Nếu cổng đó đang được chương trình khác sử dụng, MTUNZ tự chọn một cổng trống khác và hiển thị cổng thực tế trong lời mời kết nối.
 
-1. Mở thư mục `Server`.
-2. Nhấp đúp `start-server.bat`.
-3. Khi Windows Firewall hỏi, chỉ cho phép kết nối trên mạng **Private**.
-4. Giữ cửa sổ máy chủ mở trong khi hai thiết bị sử dụng MTUNZ.
-5. Mở Command Prompt, chạy `ipconfig`, tìm **IPv4 Address** của card Wi-Fi. Ví dụ: `192.168.1.20`.
+## 1. Cài đặt ứng dụng
 
-Máy chủ dùng cổng TCP `8787`. Đây là cấu hình thử nghiệm mạng nội bộ; không mở cổng này trực tiếp ra Internet.
+**Windows 10/11**
 
-## 3. Cài ứng dụng
+1. Giải nén toàn bộ gói Windows portable vào một thư mục.
+2. Giữ nguyên thư mục `MTUNZ` cùng các DLL và thư mục `data` bên trong.
+3. Nếu thiếu `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll` hoặc `MSVCP140.dll`, cài Microsoft Visual C++ Redistributable x64 từ [trang tải chính thức](https://aka.ms/vc14/vc_redist.x64.exe).
+4. Chạy `MTUNZ.exe`.
+5. Khi Windows Firewall hỏi quyền truy cập mạng, chỉ cho phép MTUNZ trên mạng **Private** đáng tin cậy. Không cho phép trên Public network.
 
-**Windows:** mở thư mục `Windows/MTUNZ` trong gói, sau đó chạy `MTUNZ.exe`. Không di chuyển riêng file EXE ra khỏi thư mục vì ứng dụng cần các DLL và thư mục `data` đi kèm.
+**Android**
 
-**Android:** chép `Android/MTUNZ-Android-0.3.0-dev.apk` sang điện thoại và mở để cài đặt. Chỉ cấp quyền cài ứng dụng không rõ nguồn cho trình quản lý tệp/trình duyệt mà bạn đang dùng, sau đó có thể tắt quyền này lại.
+1. Chép APK MTUNZ 0.4 vào điện thoại và cài đặt.
+2. Mở MTUNZ và giữ ứng dụng hoạt động trong khi kết nối LAN.
+3. Khi chia sẻ màn hình, chấp thuận hộp thoại MediaProjection của Android.
+4. Để nhận thao tác điều khiển, chủ thiết bị phải tự bật MTUNZ Accessibility và xác nhận từng yêu cầu.
 
-## 4. Ghép nối hai thiết bị
+## 2. Tạo phòng và ghép nối
 
-1. Mở MTUNZ trên Windows và Android.
-2. Trên cả hai thiết bị, mở **Cài đặt** và nhập cùng địa chỉ máy chủ, ví dụ `http://192.168.1.20:8787`.
-3. Trên thiết bị thứ nhất, chọn **Tạo phòng kết nối**.
-4. Trên thiết bị thứ hai, chọn **Nhập mã phòng**, điền mã phòng 8 ký tự và PIN 6 chữ số.
-5. Khi thấy trạng thái thiết bị đã kết nối, hai thiết bị có thể bắt đầu chia sẻ màn hình hoặc truyền tệp.
+1. Kết nối Windows và Android vào cùng mạng Wi-Fi/LAN; hoặc chuẩn bị mạng Ethernet/USB tethering có định tuyến giữa hai thiết bị.
+2. Mở MTUNZ trên cả hai thiết bị. Core tích hợp sẽ tự khởi động.
+3. Trên thiết bị sẽ làm máy chủ phòng, chọn **Tạo phòng kết nối**.
+4. Lời mời hiển thị một mã cho từng adapter đang hoạt động. Chọn mã có nhãn của đường mạng mà thiết bị còn lại có thể truy cập (Wi-Fi, Ethernet, USB hoặc VPN).
+5. Sao chép mã đó. Trên thiết bị nhận, chọn **Nhập mã phòng** và chỉ dán mã mời này; không cần nhập địa chỉ máy chủ hay PIN.
+6. Khi trạng thái chuyển sang đã kết nối, có thể chia sẻ màn hình, gửi tệp hoặc yêu cầu điều khiển.
 
-Trên Android, không nhập `127.0.0.1`: địa chỉ đó trỏ về chính điện thoại. Windows chạy máy chủ trên cùng PC mới có thể dùng `http://127.0.0.1:8787`.
+Ứng dụng tự đọc địa chỉ máy chủ từ mã mời. Hãy gửi toàn bộ mã MTZ1, không tách URL hoặc PIN.
 
-## 5. Truyền tệp
+## 3. Chọn đúng địa chỉ mạng
 
-1. Mở mục **Tệp tin** trong MTUNZ.
-2. Chọn thiết bị nhận trong danh sách.
-3. Bấm **Chọn tệp và gửi**, rồi chọn một tệp trên thiết bị gửi.
-4. Trên thiết bị nhận, đọc tên và dung lượng tệp trong hộp thoại rồi chọn **Chấp nhận tệp** hoặc **Từ chối**.
-5. Nếu chấp nhận, chọn vị trí lưu trong hộp thoại hệ thống.
-6. Hai bên có thể xem tiến trình truyền và hủy khi đang truyền.
+- **Wi-Fi:** chọn địa chỉ IPv4 Wi-Fi khi hai thiết bị ở cùng mạng hoặc có thể định tuyến tới nhau.
+- **Ethernet:** chọn IPv4 Ethernet trên PC nếu điện thoại và PC nằm trong cùng LAN.
+- **USB tethering:** bật **Chia sẻ Internet qua USB / USB tethering** trên Android; trên Windows cần xuất hiện adapter RNDIS/USB. Chọn mã mời gắn nhãn RNDIS/USB.
+- **VPN:** cài cùng ZeroTier, Tailscale hoặc WireGuard trên cả hai thiết bị; kết nối chúng vào cùng mạng VPN rồi dùng mã mời gắn nhãn VPN. Kiểm tra quyền truy cập giữa các peer.
+- Một dây USB đơn thuần không tạo ra giao thức truyền USB trực tiếp; MTUNZ dùng IP networking qua RNDIS/tethering.
 
-Giới hạn hiện tại là **100 MB cho mỗi tệp**. Bên nhận đang ghép toàn bộ tệp trong bộ nhớ trước khi mở hộp thoại lưu; nên thử bằng tệp nhỏ trước và tránh gửi nhiều tệp lớn cùng lúc.
+Nếu không thấy địa chỉ, vào **Cài đặt → WI-FI / ETHERNET / USB → Quét adapter mạng**. Khi có nhiều adapter, chọn mã mời phù hợp với cùng mạng LAN/VPN mà hai thiết bị đang dùng.
 
-## 6. Lưu ý khi kiểm thử
+## 4. Chia sẻ màn hình, điều khiển và truyền tệp
 
-- Gói này đã qua GitHub Actions: Flutter analyze, Flutter tests, Android APK build, Windows desktop build, Go race tests/vet và Windows signaling cross-build.
-- CI không thay thế kiểm thử thực tế. Cần thử gửi tệp nhỏ theo cả hai chiều Windows → Android và Android → Windows, thử từ chối, hủy, hủy chọn nơi lưu và ngắt Wi-Fi giữa chừng.
-- Kết nối WebRTC trực tiếp có thể không thành công trên một số mạng NAT/nhà mạng. Bản phát triển hiện chưa đóng gói TURN relay.
-- Signaling server hiện dùng HTTP cho thử nghiệm LAN. Không đưa máy chủ này trực tiếp lên Internet công cộng.
-- Khi xong, chọn **Ngắt phiên** và đóng cửa sổ signaling server.
+- **Chia sẻ màn hình:** bắt đầu trên thiết bị muốn được xem. Android yêu cầu xác nhận chia sẻ màn hình từ hệ thống.
+- **Điều khiển Android:** bật MTUNZ trong Accessibility; thiết bị nhận phải chấp thuận yêu cầu trước khi có thao tác.
+- **Truyền tệp:** mở mục **Tệp tin**, chọn thiết bị nhận, chọn tệp. Người nhận phải chấp nhận và tự chọn vị trí lưu.
 
-## Thành phần trong gói
+Giới hạn hiện tại: tối đa 3 thiết bị/phòng, phòng hết hạn sau 15 phút, tệp tối đa 100 MB. Bên nhận hiện ghép toàn bộ tệp trong bộ nhớ trước khi lưu; chỉ cho phép một lượt nhận/lưu tại một thời điểm để hạn chế RAM.
 
-- `Android/MTUNZ-Android-0.3.0-dev.apk` — APK đa kiến trúc, gồm arm64-v8a, armeabi-v7a và x86_64.
-- `Windows/MTUNZ/` — ứng dụng Windows portable và các thư viện đi kèm.
-- `Server/MTUNZ-Signaling-Windows.exe` — máy chủ ghép nối Windows.
-- `Server/start-server.bat` — tệp chạy máy chủ trên cổng 8787.
-- `SHA256SUMS.txt` — mã SHA-256 để kiểm tra tệp.
+## 5. Kết nối qua Internet khác mạng
+
+Embedded Core là chế độ ghép nối LAN/VPN đáng tin cậy, không phải máy chủ Internet công cộng. Để kết nối qua hai mạng Internet khác nhau mà không dùng VPN, cần triển khai signaling HTTPS và TURN relay trên VPS riêng.
+
+1. Triển khai mẫu Linux tại `deploy/README.md` với VPS, domain/DNS, firewall và secrets riêng.
+2. Cấu hình coturn/TURN và `MTUNZ_TURN_URLS`, `MTUNZ_TURN_SHARED_SECRET` theo hướng dẫn triển khai.
+3. Trên thiết bị chủ, vào **Cài đặt → Địa chỉ Core**, nhập URL HTTPS công khai, ví dụ `https://signal.example.com`, rồi lưu. MTUNZ ghi nhớ URL này cho các lần mở ứng dụng sau.
+4. Tạo phòng và gửi mã mời MTZ1. Mã này đã chứa URL máy chủ; thiết bị nhận chỉ cần nhập một mã duy nhất.
+
+Không mở trực tiếp cổng HTTP Core nội bộ ra Internet. Repo cung cấp cấu hình triển khai nhưng không cung cấp VPS/TURN công khai được host sẵn.
+
+## 6. Chẩn đoán cơ bản
+
+- Nếu Core không khởi động, mở **Cài đặt** và xem trạng thái Core; có thể bấm **Thử lại**.
+- Nếu thiết bị khác không kết nối được, kiểm tra hai thiết bị có cùng LAN hoặc cùng VPN; nếu dùng Internet khác mạng, xác nhận đã cấu hình URL HTTPS và TURN.
+- Nếu Windows Firewall chặn kết nối, cho phép MTUNZ trên Private network.
+- Nếu Core chạy nhưng kết nối WebRTC/video/file không thiết lập được, mạng có thể chặn P2P; khi đó cần TURN relay trong một deployment HTTPS bên ngoài.
+- Khi thử nghiệm LAN, giữ MTUNZ đang mở trên cả hai thiết bị. Android có thể hạn chế hoạt động mạng khi ứng dụng bị đưa xuống nền.
+
+## Các kiểm thử cần thực hiện trước khi coi là ổn định
+
+CI analysis và build không thay thế kiểm thử phần cứng. Cần xác nhận trên Windows 10, Windows 11 và Android thực tế: tạo/join phòng, Wi-Fi hai chiều, Ethernet, USB tethering, chia sẻ màn hình, từ chối/cho phép điều khiển, truyền tệp hai chiều, từ chối/hủy tệp và khôi phục sau khi ngắt mạng.

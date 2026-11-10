@@ -28,6 +28,60 @@ void main() {
     expect(find.textContaining('100 MB'), findsOneWidget);
   });
 
+  testWidgets('joining a room asks for one complete invitation code', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Phiên điều khiển').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tham gia phòng'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mã mời MTUNZ'), findsOneWidget);
+    expect(find.text('Địa chỉ Core của thiết bị tạo phòng'), findsNothing);
+    expect(find.text('PIN'), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('Settings includes wired network setup guidance', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('WI-FI / ETHERNET / USB'), findsOneWidget);
+    expect(find.text('Quét adapter mạng'), findsOneWidget);
+    expect(find.textContaining('adapter RNDIS'), findsOneWidget);
+  });
+
+  testWidgets('remembers a configured HTTPS signaling service across app restarts', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+
+    final serverField = find.byType(TextField);
+    expect(serverField, findsOneWidget);
+    await tester.enterText(serverField, 'https://signal.example.net');
+    await tester.ensureVisible(find.text('Lưu địa chỉ Core'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lưu địa chỉ Core'));
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('mtunz.signalingServer'), 'https://signal.example.net');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+    final restoredField = tester.widget<TextField>(find.byType(TextField));
+    expect(restoredField.controller?.text, 'https://signal.example.net');
+  });
+
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();
