@@ -53,6 +53,33 @@ void main() {
     expect(find.textContaining('adapter RNDIS'), findsOneWidget);
   });
 
+  testWidgets('remembers a configured HTTPS signaling service across app restarts', (tester) async {
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+
+    final serverField = find.byType(TextField);
+    expect(serverField, findsOneWidget);
+    await tester.enterText(serverField, 'https://signal.example.net');
+    await tester.tap(find.text('Lưu địa chỉ Core'));
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('mtunz.signalingServer'), 'https://signal.example.net');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const MtunzApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cài đặt').last);
+    await tester.pumpAndSettle();
+    final restoredField = tester.widget<TextField>(find.byType(TextField));
+    expect(restoredField.controller?.text, 'https://signal.example.net');
+  });
+
   testWidgets('Language can be changed immediately and is remembered', (tester) async {
     await tester.pumpWidget(const MtunzApp());
     await tester.pumpAndSettle();
