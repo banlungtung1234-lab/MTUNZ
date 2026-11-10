@@ -92,7 +92,7 @@ This is a development milestone, not a production remote-support suite.
 
 The `deploy/` directory contains a Linux VPS template with the Go signaling service, Caddy HTTPS reverse proxy and coturn. It is not a hosted MTUNZ service. A user must provide their own VPS, domain/DNS, firewall configuration and secrets.
 
-Do not publish the embedded Core's HTTP port directly to the Internet. Configure the host app's Core address in Settings with the public HTTPS signaling URL, for example `https://signal.example.com`; the joiner only needs the copied invite code. The Go service can issue temporary coturn REST credentials when configured with `MTUNZ_TURN_URLS` and `MTUNZ_TURN_SHARED_SECRET`. A VPS, domain/DNS, firewall rules and coturn relay are required; this repository provides a deployment template, not a hosted service.
+Do not publish the embedded Core's HTTP port directly to the Internet. Configure the host app's Core address in Settings with the public HTTPS signaling URL, for example `https://signal.example.com`; MTUNZ remembers it across restarts, and the joiner only needs the copied invite code. The Go service can issue temporary coturn REST credentials when configured with `MTUNZ_TURN_URLS` and `MTUNZ_TURN_SHARED_SECRET`. A VPS, domain/DNS, firewall rules and coturn relay are required; this repository provides a deployment template, not a hosted service.
 
 ## Build and validation
 

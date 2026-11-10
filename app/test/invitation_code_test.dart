@@ -31,6 +31,14 @@ void main() {
       throwsA(isA<FormatException>()));
   });
 
+  test('recognizes private LAN, VPN and loopback hosts for HTTP URLs', () {
+    for (final host in ['127.0.0.1', '192.168.1.5', '10.0.0.2', '172.20.0.2', '100.64.0.5', 'fc00::1']) {
+      expect(InvitationCode.isLocalNetworkHost(host), isTrue, reason: host);
+    }
+    expect(InvitationCode.isLocalNetworkHost('signal.example.net'), isFalse);
+    expect(InvitationCode.isLocalNetworkHost('8.8.8.8'), isFalse);
+  });
+
   test('rejects invalid credentials and oversized invitation tokens', () {
     expect(() => InvitationCode.encode(serverUrl: 'https://signal.example.net', roomCode: 'badcode!', pin: '123456'),
       throwsA(isA<FormatException>()));

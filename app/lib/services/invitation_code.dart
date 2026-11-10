@@ -78,6 +78,8 @@ class InvitationCode {
     return uri.replace(path: path);
   }
 
+  static bool isLocalNetworkHost(String host) => _isLocalNetworkHost(host);
+
   static bool _isLocalNetworkHost(String host) {
     final normalized = host.toLowerCase();
     if (normalized == 'localhost' || normalized.endsWith('.localhost') || normalized.endsWith('.local')) return true;

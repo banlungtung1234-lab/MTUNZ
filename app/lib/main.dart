@@ -122,6 +122,8 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static const _serverPreferenceKey = 'mtunz.signalingServer';
+
   final _serverController = TextEditingController();
   final EmbeddedSignalingServer _embeddedCore = EmbeddedSignalingServer();
   final _codeController = TextEditingController();
@@ -129,6 +131,7 @@ class _HomeShellState extends State<HomeShell> {
   String _serverUrl = '';
   bool _coreStarting = false;
   Future<void>? _coreStartup;
+  Future<void>? _serverRestoreTask;
   bool _usesEmbeddedCore = true;
   String? _coreError;
   String _statusKey = 'status_not_connected';
@@ -158,7 +161,48 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    _serverRestoreTask = _restoreSignalingServer();
     unawaited(_startEmbeddedCore());
+  }
+
+  Future<void> _restoreSignalingServer() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final saved = preferences.getString(_serverPreferenceKey)?.trim();
+      if (saved == null || saved.isEmpty) return;
+      final uri = Uri.tryParse(saved);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
+          uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment ||
+          (uri.hasPort && (uri.port < 1 || uri.port > 65535))) {
+        await preferences.remove(_serverPreferenceKey);
+        return;
+      }
+      final path = uri.path.endsWith('/')
+          ? uri.path.substring(0, uri.path.length - 1)
+          : uri.path;
+      final normalized = uri.replace(path: path).toString();
+      if (!mounted) return;
+      setState(() {
+        _serverUrl = normalized;
+        _serverController.text = normalized;
+        _usesEmbeddedCore = false;
+      });
+    } catch (_) {
+      // Keep the embedded LAN/VPN Core as the safe fallback.
+    }
+  }
+
+  Future<void> _persistSignalingServer(String? value) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (value == null || value.isEmpty) {
+        await preferences.remove(_serverPreferenceKey);
+      } else {
+        await preferences.setString(_serverPreferenceKey, value);
+      }
+    } catch (_) {
+      // The selected server remains available for the current app session.
+    }
   }
 
   Future<void> _startEmbeddedCore() {
@@ -218,6 +262,8 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _createRoom() async {
+    // Resolve a saved HTTPS endpoint before choosing the LAN/VPN Core.
+    await _serverRestoreTask;
     // Embedded Core remains the LAN/VPN default. A custom HTTPS signaling
     // service configured in Settings is used for cross-Internet rooms.
     if (_usesEmbeddedCore) {
@@ -791,7 +837,8 @@ class _HomeShellState extends State<HomeShell> {
         uri.userInfo.isNotEmpty ||
         uri.hasQuery ||
         uri.hasFragment ||
-        !validPort) {
+        !validPort ||
+        (uri.scheme == 'http' && !InvitationCode.isLocalNetworkHost(uri.host))) {
       if (showNotice) _showSnack(_t('server_invalid'));
       return false;
     }
@@ -799,16 +846,22 @@ class _HomeShellState extends State<HomeShell> {
     final path = uri.path.endsWith('/')
         ? uri.path.substring(0, uri.path.length - 1)
         : uri.path;
-    final normalized = uri.replace(path: path).toString();
+    final normalizedUri = uri.replace(path: path);
+    final normalized = normalizedUri.toString();
     final localHost = uri.host == '127.0.0.1' ||
         uri.host == 'localhost' ||
         _networkEndpoints.any((endpoint) => endpoint.address == uri.host);
+    final usesEmbeddedCore =
+        _embeddedCore.isRunning && uri.port == _embeddedCore.port && localHost;
 
     setState(() {
       _serverUrl = normalized;
-      _usesEmbeddedCore =
-          _embeddedCore.isRunning && uri.port == _embeddedCore.port && localHost;
+      _serverController.text = normalized;
+      _usesEmbeddedCore = usesEmbeddedCore;
     });
+    // Persist a custom HTTPS signaling endpoint across app restarts. Selecting
+    // this device's own embedded LAN/VPN address clears that remote override.
+    unawaited(_persistSignalingServer(usesEmbeddedCore ? null : normalized));
     if (showNotice) _showSnack(_t('server_saved'));
     return true;
   }

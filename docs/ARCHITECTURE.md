@@ -56,7 +56,7 @@ Keep MTUNZ open on Android during a hosted LAN session. Android may suspend netw
 
 ## Internet connectivity
 
-The embedded Core is designed for trusted LAN pairing. Different Internet networks without a VPN need a reachable HTTPS signaling server and a secured TURN relay. The host configures the public signaling URL once in Settings; its one-code invite token carries that URL to the guest, so the guest only pastes one code. The optional Go service can issue short-lived coturn REST credentials using `MTUNZ_TURN_URLS`, `MTUNZ_TURN_SHARED_SECRET` and `MTUNZ_TURN_CREDENTIAL_TTL_SECONDS`. The self-hosted Linux template uses Caddy and coturn, but it is a deployment template, not a public MTUNZ service.
+The embedded Core is designed for trusted LAN pairing. Different Internet networks without a VPN need a reachable HTTPS signaling server and a secured TURN relay. The host configures the public signaling URL once in Settings; MTUNZ persists the custom URL across restarts, and its one-code invite token carries that URL to the guest, so the guest only pastes one code. The optional Go service can issue short-lived coturn REST credentials using `MTUNZ_TURN_URLS`, `MTUNZ_TURN_SHARED_SECRET` and `MTUNZ_TURN_CREDENTIAL_TTL_SECONDS`. The self-hosted Linux template uses Caddy and coturn, but it is a deployment template, not a public MTUNZ service.
 
 The Go service and relay must be deployed on infrastructure the user controls. TURN-over-TLS, external NAT acceptance tests, signed Android production builds and public infrastructure are not included in this development milestone.
 

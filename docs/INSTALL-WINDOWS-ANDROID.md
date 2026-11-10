@@ -64,7 +64,7 @@ Embedded Core là chế độ ghép nối LAN/VPN đáng tin cậy, không phả
 
 1. Triển khai mẫu Linux tại `deploy/README.md` với VPS, domain/DNS, firewall và secrets riêng.
 2. Cấu hình coturn/TURN và `MTUNZ_TURN_URLS`, `MTUNZ_TURN_SHARED_SECRET` theo hướng dẫn triển khai.
-3. Trên thiết bị chủ, vào **Cài đặt → Địa chỉ Core**, nhập URL HTTPS công khai, ví dụ `https://signal.example.com`, rồi lưu một lần.
+3. Trên thiết bị chủ, vào **Cài đặt → Địa chỉ Core**, nhập URL HTTPS công khai, ví dụ `https://signal.example.com`, rồi lưu. MTUNZ ghi nhớ URL này cho các lần mở ứng dụng sau.
 4. Tạo phòng và gửi mã mời MTZ1. Mã này đã chứa URL máy chủ; thiết bị nhận chỉ cần nhập một mã duy nhất.
 
 Không mở trực tiếp cổng HTTP Core nội bộ ra Internet. Repo cung cấp cấu hình triển khai nhưng không cung cấp VPS/TURN công khai được host sẵn.
