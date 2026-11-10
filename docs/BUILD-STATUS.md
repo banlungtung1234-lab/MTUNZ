@@ -20,25 +20,26 @@
 - Remove an indeterminate network-scan spinner from a hidden IndexedStack page. It previously prevented Flutter widget tests from settling.
 - Add integration tests using the actual `SignalingClient` against the embedded Core: health probe, create, host join, second-device join, peer-joined, SDP offer, peer-left and wrong-Core rejection.
 
-## Current CI status
+## CI validation — 2026-11-10
 
-The latest code commit is being validated by GitHub Actions. Do not treat older runs from earlier intermediate commits as validation of the current branch head.
+Latest inspected workflow: [run #80](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42673964480), source commit `24bd8c5f72272db10fcc7c6dee4409b8bd487533`.
 
-Latest workflow run: [run #68](https://github.com/banlungtung1234-lab/MTUNZ/actions/runs/42671398635).
+The GitHub job API exposed the following results:
 
-The workflow covers:
+| Job returned by run #80 | Result | Checks |
+|---|---|---|
+| Build Android APK | **Success** | Flutter analysis, Flutter tests and release APK build |
+| Build Windows application (windows-2022) | **Success** | Flutter analysis, Flutter tests, Windows release build and ZIP packaging |
+| Build Windows signaling server | **Success** | Go race tests, `go vet` and Windows amd64 cross-build |
+| Publish MTUNZ release assets | **Skipped** | Expected for a pull-request run; this job only runs for tags |
 
-| Job | Checks |
-|---|---|
-| Android APK | Flutter analysis, unit/widget/integration tests, release APK |
-| Windows 2022 x64 | Flutter analysis, tests, Windows release build and ZIP packaging |
-| Current Windows runner x64 | Same analysis, tests, build and packaging on current Windows image |
-| Optional Go signaling service | Go race tests, vet and Windows amd64 cross-build |
-| Remote deployment template | Docker Compose and Caddy validation, Linux signaling container build |
+**Important aggregate-status discrepancy:** GitHub reports the overall workflow conclusion as `failure`, although the API returned three successful build jobs and one skipped release job, with no failed job or failing step exposed. The API also rejected the request to rerun this workflow. Therefore this run is evidence that the three returned build pipelines passed, but it is **not** recorded as a clean all-jobs green workflow. The branch workflow file also defines a second Windows runner and a remote-deployment validation job; neither appeared in the returned job list for run #80, so those checks are still unverified.
 
-## Known CI issue already found and addressed
+The current 0.4.0-dev binaries were assembled from the successful artifacts of run #80 and independently checked for ZIP integrity and SHA-256. They are development artifacts, not a stable release.
 
-A previous run reported 13 passing tests and 4 widget tests timing out at `pumpAndSettle`. The new Core startup asynchronously scanned network interfaces while Settings remained mounted inside an `IndexedStack`; the hidden page contained an indeterminate circular-progress animation. The scan indicator is now static while scanning, so hidden pages no longer animate forever. The next current-head workflow must confirm the test fix.
+## Known CI issue already addressed
+
+An earlier run reported widget tests timing out at `pumpAndSettle`. The new Core startup asynchronously scanned network interfaces while Settings remained mounted inside an `IndexedStack`; an indeterminate spinner on the hidden page prevented tests from settling. The scan indicator is now static while scanning, and the Android plus Windows 2022 Flutter test steps in run #80 passed.
 
 ## Limitations — not yet certified as stable
 
